@@ -1,4 +1,42 @@
-Another Qt installer(aqt)
+.. _warning:
+
+**WARNING**
+===========
+
+This is an *UNOFFICIAL* version made by Kidev in order to be able to use my fork of `install-qt-action`.
+This was required because Qt changed the way WASM was handled in the repositories, and I needed to be able to use Qt 6.8.
+This creates the version `3.2.*` as backward compatibility should be maintained here.
+
+Notable changes to support WASM for Qt 6.7+
+------------------------------------------
+
+Backward compatibility is maintained, but to have WASM working with Qt 6.7+, you must:
+
+- Use `aqtinstall` to install a *host architecture* version of Qt, for example, `gcc_64`.
+- Use the new parameter ``--wasm [single/multi]`` to also download the Qt for WASM (the target architecture).
+- Inside the `install-qt-action`, you need to add the parameter `wasm`, which can be one of the following: ``none`` (default), ``singlethread``, ``multithread``
+
+Example configuration
+----------------------
+
+.. code-block:: yaml
+
+    - name: Install Qt for host & target architecture
+      uses: kidev/install-qt-action@v4.2.0
+      with:
+        aqtversion: '==3.2.*'
+        version: '6.8.0'
+        host: 'linux'
+        wasm: 'singlethread'
+        target: 'desktop'
+        set-env: 'false'
+        arch: 'gcc_64'
+        modules: 'qtquick3d'
+        cache: 'true'
+        cache-key-prefix: 'install-qt-host'
+
+
+Another Qt installer(aqt) with working WASM support for Qt 6.7+
 =========================
 
 - Release: |pypi|
