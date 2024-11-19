@@ -649,6 +649,13 @@ class Cli:
         install_qt_parser.set_defaults(func=self.run_install_qt)
         self._set_common_arguments(install_qt_parser)
         self._set_common_options(install_qt_parser)
+        # Add wasm option before arch
+        install_qt_parser.add_argument(
+            "--wasm",
+            choices=["none", "singlethread", "multithread"],
+            default="none",
+            help="Install WebAssembly support (Qt 6.7+ only). Choose threading model."
+        )
         install_qt_parser.add_argument(
             "arch",
             nargs="?",
@@ -672,18 +679,6 @@ class Cli:
         )
         self._set_module_options(install_qt_parser)
         self._set_archive_options(install_qt_parser)
-        install_qt_parser.add_argument(
-            "--noarchives",
-            action="store_true",
-            help="No base packages; allow mod amendment with --modules option.",
-        )
-        install_qt_parser.add_argument(
-            "--autodesktop",
-            action="store_true",
-            help="For Qt6 android, ios, wasm, and msvc_arm64 installations, an additional desktop Qt installation is "
-            "required. When enabled, this option installs the required desktop version automatically. "
-            "It has no effect when the desktop installation is not required.",
-        )
 
     def _set_install_tool_parser(self, install_tool_parser):
         install_tool_parser.set_defaults(func=self.run_install_tool)

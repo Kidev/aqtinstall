@@ -376,10 +376,42 @@ class ModuleData(TableMetadata):
 
 
 class QtRepoProperty:
-    """
-    Describes properties of the Qt repository at https://download.qt.io/online/qtsdkrepository.
-    Intended to help decouple the logic of aqt from specific properties of the Qt repository.
-    """
+    @staticmethod
+    def is_in_wasm_range(host: str, version: Version) -> bool:
+        """Check if WASM is supported for this Qt version/host combination"""
+        if version >= Version("6.7.0"):
+            # Qt 6.7+ uses new WASM architecture
+            return True
+        # Older versions use previous implementation
+        return (
+            version in SimpleSpec(">=6.2.0,<6.5.0") or
+            (host == "linux" and version in SimpleSpec(">=5.13,<6")) or
+            version in SimpleSpec(">=5.13.1,<6")
+        )
+
+    @staticmethod
+    def is_in_wasm_threaded_range(version: Version) -> bool:
+        """Check if threaded WASM is supported"""
+        if version >= Version("6.7.0"):
+            # Qt 6.7+ supports both threading models
+            return True
+        # Prior versions only support threaded in 6.5+
+        return version in SimpleSpec(">=6.5.0,<6.7.0")
+
+    @staticmethod
+    def extension_for_arch(architecture: str, is_version_ge_6: bool) -> str:
+        """Get extension for architecture name"""
+        if architecture == "wasm_32":
+            return "wasm"
+        elif architecture == "wasm_singlethread":
+            return "wasm_singlethread"
+        elif architecture == "wasm_multithread":
+            return "wasm_multithread"
+        elif architecture.startswith("android_") and is_version_ge_6:
+            ext = architecture[len("android_"):]
+            if ext in ArchiveId.EXTENSIONS_REQUIRED_ANDROID_QT6:
+                return ext
+        return ""
 
     @staticmethod
     def dir_for_version(ver: Version) -> str:

@@ -3,59 +3,31 @@
 **WARNING**
 ===========
 
-This is an *UNOFFICIAL* version made by Kidev in order to be able to use my fork of `install-qt-action`.
-This was required because Qt changed the way WASM was handled in the repositories, and I needed to be able to use Qt 6.8.
+This is an *UNOFFICIAL* version made by `kidev`_. installed by `kidev's fork of 'install-qt-action'`_.
+This was required because Qt changed the way WASM was handled in the repositories, and installing Qt 6.7+ was impossible
 This creates the version `3.2.*` as backward compatibility should be maintained here.
+
+.. _`kidev`: https://github.com/Kidev
+.. _`kidev's fork of 'install-qt-action'`: https://github.com/Kidev/install-qt-action
 
 Notable changes to support WASM for Qt 6.7+
 ------------------------------------------
 
 Backward compatibility is maintained, but to have WASM working with Qt 6.7+, you must:
 
-- Use `aqtinstall` to install a *host architecture* version of Qt, for example, `gcc_64`.
-- Use the new parameter ``--wasm [single/multi]`` to also download the Qt for WASM (the target architecture).
-- Inside the `install-qt-action`, you need to add the parameter `wasm`, which can be one of the following: ``none`` (default), ``singlethread``, ``multithread``
+- Use ``aqtinstall`` to install a **host architecture** version of Qt, for example, ``gcc_64``
+- Use the new parameter ``--wasm [singlethread/multithread]`` to also download the Qt for WASM (the target architecture).
 
-Example configuration
+Example command to install Qt 6.8.0 for ``gcc_64`` and ``wasm_singlethread``
 ----------------------
 
-.. code-block:: yaml
+.. code-block:: sh
 
-    - name: Install Qt for host & target architecture
-      uses: kidev/install-qt-action@v4.2.0
-      with:
-        aqtversion: '==3.2.*'
-        version: '6.8.0'
-        host: 'linux'
-        wasm: 'singlethread'
-        target: 'desktop'
-        set-env: 'false'
-        arch: 'gcc_64'
-        modules: 'qtquick3d'
-        cache: 'true'
-        cache-key-prefix: 'install-qt-host'
+    aqt install-qt linux desktop 6.8.0 gcc_64 --wasm singlethread -m all --autodesktop
 
 
 Another Qt installer(aqt) with working WASM support for Qt 6.7+
 =========================
-
-- Release: |pypi|
-- Documentation: |docs|
-- Test status: |gha| and Coverage: |coveralls|
-- Project maturity |Package health|
-
-.. |pypi| image:: https://badge.fury.io/py/aqtinstall.svg
-   :target: http://badge.fury.io/py/aqtinstall
-.. |docs| image:: https://readthedocs.org/projects/aqtinstall/badge/?version=stable
-   :target: https://aqtinstall.readthedocs.io/en/latest/?badge=stable
-.. |gha| image:: https://github.com/miurahr/aqtinstall/workflows/Test%20on%20GH%20actions%20environment/badge.svg
-   :target: https://github.com/miurahr/aqtinstall/actions?query=workflow%3A%22Test+on+GH+actions+environment%22
-.. |coveralls| image:: https://coveralls.io/repos/github/miurahr/aqtinstall/badge.svg?branch=master
-   :target: https://coveralls.io/github/miurahr/aqtinstall?branch=master
-.. |Package health| image:: https://snyk.io/advisor/python/aqtinstall/badge.svg
-  :target: https://snyk.io/advisor/python/aqtinstall
-  :alt: aqtinstall
-
 
 
 This is a utility alternative to the official graphical Qt installer, for using in CI environment
@@ -151,8 +123,8 @@ It may be difficult to set up some Windows systems with the correct version of P
 To get around this problem, ``aqtinstall`` offers ``aqt.exe``, a Windows executable that contains Python and all required dependencies.
 You may access ``aqt.exe`` from the `Releases section`_, under "assets", or via the persistent link to `the continuous build`_ of ``aqt.exe``.
 
-.. _`Releases section`: https://github.com/miurahr/aqtinstall/releases
-.. _`the continuous build`: https://github.com/miurahr/aqtinstall/releases/download/Continuous/aqt.exe
+.. _`Releases section`: https://github.com/Kidev/aqtinstall/releases
+.. _`the continuous build`: https://github.com/Kidev/aqtinstall/releases/download/Continuous/aqt.exe
 
 
 Example
@@ -220,10 +192,7 @@ Some projects utilize aqtinstall, and there are several articles and discussions
 
 * Yet another comic reader: `YACReader`_  utilize on Azure-Pipelines
 
-.. _`install_qt`: https://github.com/jurplel/install-qt-action
-.. _`docker aqtinstall`: https://github.com/vslotman/docker-aqtinstall
-.. _`pyqt5-tools`: https://github.com/altendky/pyqt5-tools
-.. _`YACReader`: https://github.com/YACReader/yacreader
+.. _`install_qt`: https://github.com/Kidev/install-qt-action
 
 
 

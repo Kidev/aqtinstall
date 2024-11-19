@@ -1,9 +1,10 @@
 [project]
-name = "aqtinstall"
-description = "Another unofficial Qt installer"
+name = "aqtinstall k's"
+description = "Another unofficial unofficial Qt installer"
 license = {text = "MIT License"}
 authors = [
     {name = "Hiroshi Miura", email = "miurahr@linux.com"},
+    {name = "kidev", email = "public@kidev.org"},
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
