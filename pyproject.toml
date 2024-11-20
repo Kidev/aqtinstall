@@ -1,5 +1,5 @@
 [project]
-name = "aqtinstall k's"
+name = "aqtinstall-k"
 description = "Another unofficial unofficial Qt installer"
 license = {text = "MIT License"}
 authors = [
