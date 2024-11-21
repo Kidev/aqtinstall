@@ -206,10 +206,10 @@ class ArchiveId:
         "mac": ["android", "desktop", "ios"],
         "linux": ["android", "desktop"],
         "linux_arm64": ["desktop"],
-        "all_os": ["qt"],
+        "all_os": ["qt"],  # Required for Qt WASM
     }
+    ALL_EXTENSIONS = {"", "wasm_singlethread", "wasm_multithread"}  # Updated for new WASM
     EXTENSIONS_REQUIRED_ANDROID_QT6 = {"x86_64", "x86", "armv7", "arm64_v8a"}
-    ALL_EXTENSIONS = {"", "wasm", "src_doc_examples", *EXTENSIONS_REQUIRED_ANDROID_QT6}
 
     def __init__(self, category: str, host: str, target: str):
         if category not in ArchiveId.CATEGORIES:
@@ -259,14 +259,11 @@ class ArchiveId:
             )
 
     def all_extensions(self, version: Version) -> List[str]:
-        if self.target == "desktop" and QtRepoProperty.is_in_wasm_range(self.host, version):
-            return ["", "wasm"]
-        elif self.target == "desktop" and QtRepoProperty.is_in_wasm_threaded_range(version):
+        if version >= Version("6.7.0"):
+            # Qt 6.7+ uses new WASM architecture
             return ["", "wasm_singlethread", "wasm_multithread"]
-        elif self.target == "android" and version >= Version("6.0.0"):
-            return list(ArchiveId.EXTENSIONS_REQUIRED_ANDROID_QT6)
-        else:
-            return [""]
+        # Older versions not supported
+        return [""]
 
     def __str__(self) -> str:
         return "{cat}/{host}/{target}".format(
@@ -378,25 +375,17 @@ class ModuleData(TableMetadata):
 class QtRepoProperty:
     @staticmethod
     def is_in_wasm_range(host: str, version: Version) -> bool:
-        """Check if WASM is supported for this Qt version/host combination"""
+        """Check if WASM is supported for this Qt version"""
         if version >= Version("6.7.0"):
             # Qt 6.7+ uses new WASM architecture
             return True
-        # Older versions use previous implementation
-        return (
-            version in SimpleSpec(">=6.2.0,<6.5.0") or
-            (host == "linux" and version in SimpleSpec(">=5.13,<6")) or
-            version in SimpleSpec(">=5.13.1,<6")
-        )
+        # Below 6.7.0 uses old architecture - we don't support it in this version
+        return False
 
     @staticmethod
     def is_in_wasm_threaded_range(version: Version) -> bool:
         """Check if threaded WASM is supported"""
-        if version >= Version("6.7.0"):
-            # Qt 6.7+ supports both threading models
-            return True
-        # Prior versions only support threaded in 6.5+
-        return version in SimpleSpec(">=6.5.0,<6.7.0")
+        return version >= Version("6.7.0")  # All new WASM supports both threading models
 
     @staticmethod
     def extension_for_arch(architecture: str, is_version_ge_6: bool) -> str:

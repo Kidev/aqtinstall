@@ -303,80 +303,88 @@ class QtArchives:
         """Get WebAssembly archives for Qt 6.7+"""
         # Construct version string like "670" from "6.7.0"
         ver_str = f"{self.version.major}{self.version.minor}{self.version.patch}"
+        base_ver_str = f"{self.version.major}{self.version.minor}0"  # For 6.8+
 
-        # Construct folder name based on version and threading model
-        folder = f"qt6_{ver_str}_wasm_{self.wasm}"
-
-        # The WASM repository is under all_os/wasm
-        os_target_folder = posixpath.join(
+        # The WASM repository is under all_os/wasm/
+        os_target_base = posixpath.join(
             "online/qtsdkrepository",
             "all_os",
-            "wasm",
-            folder
+            "wasm"
         )
 
+        if self.version >= Version("6.8.0"):
+            # For 6.8+: all_os/wasm/qt6_680/qt6_680_wasm_singlethread/
+            os_target_folder = posixpath.join(
+                os_target_base,
+                f"qt6_{base_ver_str}",
+                f"qt6_{ver_str}_wasm_{self.wasm}"
+            )
+        else:
+            # For 6.7.x: all_os/wasm/qt6_673_wasm_singlethread/
+            os_target_folder = posixpath.join(
+                os_target_base,
+                f"qt6_{ver_str}_wasm_{self.wasm}"
+            )
+
         update_xml_url = posixpath.join(os_target_folder, "Updates.xml")
-        update_xml_text = self._download_update_xml(update_xml_url)
+        self.logger.debug(f"Attempting to download WASM Updates.xml from: {update_xml_url}")
+
+        try:
+            update_xml_text = self._download_update_xml(update_xml_url)
+        except Exception as e:
+            self.logger.error(f"Failed to download WASM Updates.xml: {e}")
+            raise
 
         # Parse updates.xml and add WASM archives
         wasm_xml = Updates.fromstring(self.base, update_xml_text)
         arch_name = f"wasm_{self.wasm}"
-        wasm_archives = wasm_xml.get_from(arch_name, self.is_include_base_package)
+
+        # Create a new ModuleToPackage for WASM modules if using --modules all
+        if self.all_extra:
+            target_packages = None
+        else:
+            # We need to map modules correctly for WASM
+            target_packages = ModuleToPackage({})
+            if self.mod_list:
+                for module in self.mod_list:
+                    package_names = [
+                        f"qt.qt{self.version.major}.{ver_str}.{arch_name}",
+                        f"qt.qt{self.version.major}.{ver_str}.addons.{arch_name}",
+                    ]
+                    target_packages.add(module, package_names)
+
+        # Get WASM modules
+        wasm_archives = wasm_xml.get_from(arch_name, self.is_include_base_package, target_packages)
+        self.logger.debug(f"Found {len(wasm_archives)} WASM archives")
 
         # Add archives to existing list
         for packageupdate in wasm_archives:
-            if not self.all_extra:
-                self._target_packages().remove_module_for_package(packageupdate.name)
+            if not self.all_extra and target_packages is not None:
+                target_packages.remove_module_for_package(packageupdate.name)
 
             for archive in packageupdate.downloadable_archives:
                 archive_name = archive.split("-", maxsplit=1)[0]
+                if self.subarchives is not None and archive_name not in self.subarchives:
+                    continue
                 archive_path = posixpath.join(
                     os_target_folder,
                     packageupdate.name,
                     packageupdate.full_version + archive,
                 )
-                self.archives.append(
-                    QtPackage(
-                        name=archive_name,
-                        base_url=self.base,
-                        archive_path=archive_path,
-                        archive=archive,
-                        package_desc=packageupdate.description,
-                        pkg_update_name=packageupdate.name,
-                    )
+                pkg = QtPackage(
+                    name=archive_name,
+                    base_url=self.base,
+                    archive_path=archive_path,
+                    archive=archive,
+                    package_desc=packageupdate.description,
+                    pkg_update_name=packageupdate.name,
                 )
+                self.archives.append(pkg)
+                self.logger.debug(f"Added WASM archive: {pkg}")
 
-        update_xml_url = posixpath.join(os_target_folder, "Updates.xml")
-        update_xml_text = self._download_update_xml(update_xml_url)
-
-        # Parse updates.xml and add WASM archives
-        wasm_xml = Updates.fromstring(self.base, update_xml_text)
-        arch_name = f"wasm_{self.wasm}"
-        wasm_archives = wasm_xml.get_from(arch_name, self.is_include_base_package)
-
-        # Add archives to existing list
-        for packageupdate in wasm_archives:
-            if not self.all_extra:
-                self._target_packages().remove_module_for_package(packageupdate.name)
-
-            for archive in packageupdate.downloadable_archives:
-                archive_name = archive.split("-", maxsplit=1)[0]
-                archive_path = posixpath.join(
-                    os_target_folder,
-                    packageupdate.name,
-                    packageupdate.full_version + archive,
-                )
-                self.archives.append(
-                    QtPackage(
-                        name=archive_name,
-                        base_url=self.base,
-                        archive_path=archive_path,
-                        archive=archive,
-                        package_desc=packageupdate.description,
-                        pkg_update_name=packageupdate.name,
-                    )
-                )
-
+        if not self.all_extra and target_packages is not None and len(target_packages) > 0:
+            message = f"The WASM packages {target_packages} were not found while parsing XML of package information!"
+            raise NoPackageFound(message)
 
     def handle_missing_updates_xml(self, e: ArchiveDownloadError):
         msg = f"Failed to locate XML data for Qt version '{self.version}'."

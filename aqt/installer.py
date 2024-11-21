@@ -677,8 +677,6 @@ class Cli:
             "\n                      Qt 5.13 or below: android_x86_64, android_arm64_v8a"
             "\n                                        android_x86, android_armv7",
         )
-        self._set_module_options(install_qt_parser)
-        self._set_archive_options(install_qt_parser)
         install_qt_parser.add_argument(
             "--noarchives",
             action="store_true",
@@ -691,6 +689,8 @@ class Cli:
             "required. When enabled, this option installs the required desktop version automatically. "
             "It has no effect when the desktop installation is not required.",
         )
+        self._set_module_options(install_qt_parser)
+        self._set_archive_options(install_qt_parser)
 
     def _set_install_tool_parser(self, install_tool_parser):
         install_tool_parser.set_defaults(func=self.run_install_tool)
