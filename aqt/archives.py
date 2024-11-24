@@ -327,7 +327,7 @@ class QtArchives:
             )
 
         update_xml_url = posixpath.join(os_target_folder, "Updates.xml")
-        self.logger.debug(f"Attempting to download WASM Updates.xml from: {update_xml_url}")
+        self.logger.info(f"Downloading WASM Updates.xml from: {update_xml_url}")
 
         try:
             update_xml_text = self._download_update_xml(update_xml_url)
@@ -339,11 +339,10 @@ class QtArchives:
         wasm_xml = Updates.fromstring(self.base, update_xml_text)
         arch_name = f"wasm_{self.wasm}"
 
-        # Create a new ModuleToPackage for WASM modules if using --modules all
+        # Create a new ModuleToPackage for WASM modules
         if self.all_extra:
             target_packages = None
         else:
-            # We need to map modules correctly for WASM
             target_packages = ModuleToPackage({})
             if self.mod_list:
                 for module in self.mod_list:
@@ -355,7 +354,7 @@ class QtArchives:
 
         # Get WASM modules
         wasm_archives = wasm_xml.get_from(arch_name, self.is_include_base_package, target_packages)
-        self.logger.debug(f"Found {len(wasm_archives)} WASM archives")
+        self.logger.info(f"Found {len(wasm_archives)} WASM archives to install")
 
         # Add archives to existing list
         for packageupdate in wasm_archives:
@@ -380,7 +379,7 @@ class QtArchives:
                     pkg_update_name=packageupdate.name,
                 )
                 self.archives.append(pkg)
-                self.logger.debug(f"Added WASM archive: {pkg}")
+                self.logger.info(f"Added WASM archive: {pkg}")
 
         if not self.all_extra and target_packages is not None and len(target_packages) > 0:
             message = f"The WASM packages {target_packages} were not found while parsing XML of package information!"

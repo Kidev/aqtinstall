@@ -319,6 +319,7 @@ class Cli:
         os_name: str = args.host
         qt_version_or_spec: str = getattr(args, "qt_version", getattr(args, "qt_version_spec", ""))
         arch: str = self._set_arch(args.arch, os_name, target, qt_version_or_spec)
+        wasm: str = args.wasm
         keep: bool = args.keep or Settings.always_keep_archives
         archive_dest: Optional[str] = args.archive_dest
         output_dir = args.outputdir
@@ -326,6 +327,13 @@ class Cli:
             base_dir = os.getcwd()
         else:
             base_dir = output_dir
+
+        # Handle WASM installation validation
+        _version = Version(qt_version_or_spec)
+        if wasm != "none":
+            if _version < Version("6.7.0"):
+                raise CliInputError("WASM installation is only supported for Qt 6.7.0 and above")
+
         if args.timeout is not None:
             timeout = (args.timeout, args.timeout)
         else:
@@ -341,11 +349,13 @@ class Cli:
             base = args.base
         else:
             base = Settings.baseurl
+
         if hasattr(args, "qt_version_spec"):
             qt_version: str = str(Cli._determine_qt_version(args.qt_version_spec, os_name, target, arch, base_url=base))
         else:
             qt_version = args.qt_version
             Cli._validate_version_str(qt_version)
+
         archives = args.archives
         if args.noarchives:
             if modules is None:
@@ -357,7 +367,6 @@ class Cli:
                 archives.extend(modules)
         nopatch = args.noarchives or (archives is not None and "qtbase" not in archives)  # type: bool
         should_autoinstall: bool = args.autodesktop
-        _version = Version(qt_version)
         base_path = Path(base_dir)
 
         expect_desktop_archdir, autodesk_arch = self._get_autodesktop_dir_and_arch(
@@ -377,6 +386,7 @@ class Cli:
 
         all_extra = True if modules is not None and "all" in modules else False
 
+        # First install the regular Qt packages
         qt_archives: QtArchives = retry_on_bad_connection(
             lambda base_url: QtArchives(
                 os_name,
@@ -389,22 +399,30 @@ class Cli:
                 all_extra=all_extra,
                 is_include_base_package=not args.noarchives,
                 timeout=timeout,
+                wasm=wasm
             ),
             base,
         )
         qt_archives.archives.extend(auto_desktop_archives)
         target_config = qt_archives.get_target_config()
+
+        # Install the packages
         with TemporaryDirectory() as temp_dir:
             _archive_dest = Cli.choose_archive_dest(archive_dest, keep, temp_dir)
             run_installer(qt_archives.get_packages(), base_dir, sevenzip, keep, _archive_dest)
 
-        if not nopatch:
-            Updater.update(target_config, base_path, expect_desktop_archdir)
-            if autodesk_arch is not None:
-                d_target_config = TargetConfig(str(_version), "desktop", autodesk_arch, os_name)
-                Updater.update(d_target_config, base_path, expect_desktop_archdir)
+        # Now handle WASM installation if requested
+        if wasm != "none" and _version >= Version("6.7.0"):
+            # Run updater before WASM installation
+            if not nopatch:
+                Updater.update(target_config, base_path, expect_desktop_archdir)
+                if autodesk_arch is not None:
+                    d_target_config = TargetConfig(str(_version), "desktop", autodesk_arch, os_name)
+                    Updater.update(d_target_config, base_path, expect_desktop_archdir)
+
         self.logger.info("Finished installation")
         self.logger.info("Time elapsed: {time:.8f} second".format(time=time.perf_counter() - start_time))
+
 
     def _run_src_doc_examples(self, flavor, args, cmd_name: Optional[str] = None):
         self.show_aqt_version()
@@ -677,6 +695,8 @@ class Cli:
             "\n                      Qt 5.13 or below: android_x86_64, android_arm64_v8a"
             "\n                                        android_x86, android_armv7",
         )
+        self._set_module_options(install_qt_parser)
+        self._set_archive_options(install_qt_parser)
         install_qt_parser.add_argument(
             "--noarchives",
             action="store_true",
@@ -689,8 +709,6 @@ class Cli:
             "required. When enabled, this option installs the required desktop version automatically. "
             "It has no effect when the desktop installation is not required.",
         )
-        self._set_module_options(install_qt_parser)
-        self._set_archive_options(install_qt_parser)
 
     def _set_install_tool_parser(self, install_tool_parser):
         install_tool_parser.set_defaults(func=self.run_install_tool)
