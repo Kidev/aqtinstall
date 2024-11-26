@@ -1016,24 +1016,24 @@ class Cli:
         except ValueError as e:
             raise CliInputError(f"Invalid version: '{version_str}'! Please use the form '5.X.Y'.") from e
 
-    def _get_autodesktop_dir_and_arch(
-        self, should_autoinstall: bool, host: str, target: str, base_path: Path, version: Version, arch: str
-    ) -> Tuple[Optional[str], Optional[str]]:
+    def _get_autodesktop_dir_and_arch(self, should_autoinstall: bool, host: str, target: str, base_path: Path,
+                                      version: Version, arch: str) -> Tuple[Optional[str], Optional[str]]:
         """Returns expected_desktop_arch_dir, desktop_arch_to_install"""
-        is_wasm = arch.startswith("wasm")
+        is_wasm = arch in ("wasm_singlethread", "wasm_multithread")  # Updated to handle both WASM variants
         is_msvc = "msvc" in arch
         is_win_desktop_msvc_arm64 = (
-            host == "windows" and target == "desktop" and is_msvc and arch.endswith(("arm64", "arm64_cross_compiled"))
+                host == "windows" and target == "desktop" and is_msvc and
+                arch.endswith(("arm64", "arm64_cross_compiled"))
         )
         if version < Version("6.0.0") or (
-            target not in ["ios", "android"] and not is_wasm and not is_win_desktop_msvc_arm64
+                target not in ["ios", "android"] and not is_wasm and not is_win_desktop_msvc_arm64
         ):
-            # We only need to worry about the desktop directory for Qt6 mobile or wasm installs.
             return None, None
 
-        installed_desktop_arch_dir = QtRepoProperty.find_installed_desktop_qt_dir(host, base_path, version, is_msvc=is_msvc)
+        installed_desktop_arch_dir = QtRepoProperty.find_installed_desktop_qt_dir(
+            host, base_path, version, is_msvc=is_msvc
+        )
         if installed_desktop_arch_dir:
-            # An acceptable desktop Qt is already installed, so don't do anything.
             self.logger.info(f"Found installed {host}-desktop Qt at {installed_desktop_arch_dir}")
             return installed_desktop_arch_dir.name, None
 

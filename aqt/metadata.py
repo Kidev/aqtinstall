@@ -206,7 +206,7 @@ class ArchiveId:
         "mac": ["android", "desktop", "ios"],
         "linux": ["android", "desktop"],
         "linux_arm64": ["desktop"],
-        "all_os": ["qt"],
+        "all_os": ["qt", "wasm"],
     }
     EXTENSIONS_REQUIRED_ANDROID_QT6 = {"x86_64", "x86", "armv7", "arm64_v8a"}
     ALL_EXTENSIONS = {"", "wasm", "src_doc_examples", *EXTENSIONS_REQUIRED_ANDROID_QT6}
@@ -232,6 +232,12 @@ class ArchiveId:
         return self.category == "tools"
 
     def to_url(self) -> str:
+        # Special case for WASM on Qt 6.7+
+        if (self.target == "desktop" and
+            self.arch in ("wasm_singlethread", "wasm_multithread")):
+            return "online/qtsdkrepository/all_os/wasm/"
+
+        # Default repository URL path remains unchanged
         return "online/qtsdkrepository/{os}{arch}/{target}/".format(
             os=self.host,
             arch=(
@@ -243,30 +249,47 @@ class ArchiveId:
         )
 
     def to_folder(self, version: Version, qt_version_no_dots: str, extension: Optional[str] = None) -> str:
+        # Handle WASM packages for Qt 6.7+
+        if self.target == "desktop" and self.arch in ("wasm_singlethread", "wasm_multithread"):
+            if version >= Version("6.8.0"):
+                return "qt6_{ver}/qt6_{ver}_{arch}".format(
+                    ver=qt_version_no_dots,
+                    arch=self.arch
+                )
+            elif version >= Version("6.7.0"):
+                return "qt6_{ver}_{arch}".format(
+                    ver=qt_version_no_dots,
+                    arch=self.arch
+                )
+
+        # Rest of the method remains unchanged
         if version >= Version("6.8.0"):
-            return "{category}{major}_{ver}/{category}{major}_{ver}{ext}".format(
-                category=self.category,
-                major=qt_version_no_dots[0],
-                ver=qt_version_no_dots,
-                ext="_" + extension if extension else "",
+            base_folder = "qt{major}_{ver}".format(
+                major=version.major,
+                ver=qt_version_no_dots
             )
-        else:
-            return "{category}{major}_{ver}{ext}".format(
-                category=self.category,
-                major=qt_version_no_dots[0],
-                ver=qt_version_no_dots,
-                ext="_" + extension if extension else "",
+            return "{base}/{base}{ext}".format(
+                base=base_folder,
+                ext="_" + extension if extension else ""
             )
 
+        return "{category}{major}_{ver}{ext}".format(
+            category=self.category,
+            major=qt_version_no_dots[0],
+            ver=qt_version_no_dots,
+            ext="_" + extension if extension else "",
+        )
+
     def all_extensions(self, version: Version) -> List[str]:
-        if self.target == "desktop" and QtRepoProperty.is_in_wasm_range(self.host, version):
-            return ["", "wasm"]
-        elif self.target == "desktop" and QtRepoProperty.is_in_wasm_threaded_range(version):
-            return ["", "wasm_singlethread", "wasm_multithread"]
+        if self.target == "desktop":
+            if QtRepoProperty.is_in_wasm_threaded_range(version):
+                return ["", "wasm_singlethread", "wasm_multithread"]
+            elif QtRepoProperty.is_in_wasm_range(self.host, version):
+                return ["", "wasm"]
         elif self.target == "android" and version >= Version("6.0.0"):
             return list(ArchiveId.EXTENSIONS_REQUIRED_ANDROID_QT6)
-        else:
-            return [""]
+        return [""]
+
 
     def __str__(self) -> str:
         return "{cat}/{host}/{target}".format(
@@ -521,10 +544,15 @@ class QtRepoProperty:
 
     @staticmethod
     def is_in_wasm_range(host: str, version: Version) -> bool:
+        # Qt 6.7+ and 6.8+ have special WASM repo structure
+        if version >= Version("6.7.0"):
+            return True
+
+        # Previous WASM repo versions
         return (
-            version in SimpleSpec(">=6.2.0,<6.5.0")
-            or (host == "linux" and version in SimpleSpec(">=5.13,<6"))
-            or version in SimpleSpec(">=5.13.1,<6")
+                version in SimpleSpec(">=6.2.0,<6.5.0")
+                or (host == "linux" and version in SimpleSpec(">=5.13,<6"))
+                or version in SimpleSpec(">=5.13.1,<6")
         )
 
     @staticmethod
