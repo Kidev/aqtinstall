@@ -225,6 +225,13 @@ class Cli:
         """Choose a default architecture, if one can be determined"""
         if arch is not None and arch != "":
             return arch
+        if target == "wasm":
+            try:
+                if Version(qt_version_or_spec) >= Version("6.5.0"):
+                    return "wasm_singlethread"  # Default to singlethread for 6.5+
+                return "wasm_32"  # Default for older versions
+            except ValueError:
+                return "wasm_singlethread"
         if os_name == "linux" and target == "desktop":
             try:
                 if Version(qt_version_or_spec) >= Version("6.7.0"):

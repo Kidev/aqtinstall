@@ -30,7 +30,7 @@ from defusedxml import ElementTree
 
 from aqt.exceptions import ArchiveDownloadError, ArchiveListError, ChecksumDownloadFailure, NoPackageFound
 from aqt.helper import Settings, get_hash, getUrl, ssplit
-from aqt.metadata import QtRepoProperty, Version
+from aqt.metadata import ArchiveId, MetadataFactory, QtRepoProperty, Version
 
 
 @dataclass
@@ -379,6 +379,22 @@ class QtArchives:
 
     def _get_archives(self):
         if self.version >= Version("6.8.0"):
+            # Check if module is an extension
+            remaining_modules = []
+            for module in self.mod_list:
+                ext_meta = MetadataFactory(ArchiveId("qt", self.os_name, self.target))._check_extension_metadata(
+                    module, self.version, self.arch
+                )
+                if ext_meta:
+                    # Add extension archives
+                    self._parse_extension_archives(ext_meta)
+                else:
+                    remaining_modules.append(module)
+
+            self.mod_list = remaining_modules  # Update module list to only those not found as extensions
+
+        # Original _get_archives logic
+        if self.version >= Version("6.8.0"):
             name = (
                 f"qt{self.version.major}_{self._version_str()}"
                 f"/qt{self.version.major}_{self._version_str()}{self._arch_ext()}"
@@ -386,6 +402,27 @@ class QtArchives:
         else:
             name = f"qt{self.version.major}_{self._version_str()}{self._arch_ext()}"
         self._get_archives_base(name, self._target_packages())
+
+    def _parse_extension_archives(self, metadata: Dict[str, Dict[str, str]]):
+        """Parse and add extension package archives"""
+        ver_str = f"{self.version.major}{self.version.minor}0"
+        ext_path = f"extensions/{ver_str}/{self.arch}"
+
+        for pkg_name, pkg_data in metadata.items():
+            archive = pkg_data.get("DownloadableArchives", "")
+            archive_install_path = pkg_data.get("InstallPath", "")
+            if archive:
+                self.archives.append(
+                    QtPackage(
+                        name=pkg_name,
+                        base_url=self.base,
+                        archive_path=posixpath.join(ext_path, pkg_name, archive),
+                        archive=archive,
+                        archive_install_path=archive_install_path,
+                        package_desc=pkg_data.get("Description", ""),
+                        pkg_update_name=pkg_name,
+                    )
+                )
 
     def _append_depends_tool(self, arch, tool_name):
         os_target_folder = posixpath.join(

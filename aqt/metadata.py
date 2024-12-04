@@ -206,10 +206,11 @@ class ArchiveId:
         "mac": ["android", "desktop", "ios"],
         "linux": ["android", "desktop"],
         "linux_arm64": ["desktop"],
-        "all_os": ["qt"],
+        "all_os": ["qt", "wasm"],
     }
     EXTENSIONS_REQUIRED_ANDROID_QT6 = {"x86_64", "x86", "armv7", "arm64_v8a"}
     ALL_EXTENSIONS = {"", "wasm", "src_doc_examples", *EXTENSIONS_REQUIRED_ANDROID_QT6}
+    EXTENSIONS_AS_MODULES_680 = ("qtpdf", "qtwebengine")
 
     def __init__(self, category: str, host: str, target: str):
         if category not in ArchiveId.CATEGORIES:
@@ -232,6 +233,10 @@ class ArchiveId:
         return self.category == "tools"
 
     def to_url(self) -> str:
+        # Special handling for WASM packages
+        if self.host == "all_os" and self.target == "wasm":
+            return "online/qtsdkrepository/all_os/wasm/"
+
         return "online/qtsdkrepository/{os}{arch}/{target}/".format(
             os=self.host,
             arch=(
@@ -243,6 +248,12 @@ class ArchiveId:
         )
 
     def to_folder(self, version: Version, qt_version_no_dots: str, extension: Optional[str] = None) -> str:
+        # New logic for WASM folders Qt 6.7+
+        if version >= Version("6.7.0") and self.target == "wasm":
+            if version >= Version("6.8.0"):
+                return f"qt6_{qt_version_no_dots}/qt6_{qt_version_no_dots}_wasm_{extension}"
+            return f"qt6_{qt_version_no_dots}_wasm_{extension}"
+
         if version >= Version("6.8.0"):
             return "{category}{major}_{ver}/{category}{major}_{ver}{ext}".format(
                 category=self.category,
@@ -257,6 +268,23 @@ class ArchiveId:
                 ver=qt_version_no_dots,
                 ext="_" + extension if extension else "",
             )
+
+    def to_extension_url(self, module: str, qt_version: str, arch: str) -> Optional[str]:
+        """Get URL for extension modules Qt 6.8+"""
+        os_arch = self._get_os_arch_for_extensions()
+        if not os_arch:
+            return None
+        return f"online/qtsdkrepository/{os_arch}/extensions/{module}/{qt_version}/{arch}/"
+
+    def _get_os_arch_for_extensions(self) -> Optional[str]:
+        """Get OS arch string for extensions path"""
+        if self.host == "windows":
+            return "windows_x86"
+        elif self.host == "mac":
+            return "mac_x64"
+        elif self.host == "linux":
+            return "linux_x64"
+        return None
 
     def all_extensions(self, version: Version) -> List[str]:
         if self.target == "desktop" and QtRepoProperty.is_in_wasm_range(self.host, version):
@@ -825,10 +853,10 @@ class MetadataFactory:
         )
 
     def fetch_modules(self, version: Version, arch: str) -> List[str]:
-        """Returns list of modules"""
+        """Returns list of modules including extensions"""
+        # Get regular modules first using existing logic
         extension = QtRepoProperty.extension_for_arch(arch, version >= Version("6.0.0"))
         qt_ver_str = self._get_qt_version_str(version)
-        # Example: re.compile(r"^(preview\.)?qt\.(qt5\.)?590\.(.+)$")
         pattern = re.compile(r"^(preview\.)?qt\.(qt" + str(version.major) + r"\.)?" + qt_ver_str + r"\.(.+)$")
         modules_meta = self._fetch_module_metadata(self.archive_id.to_folder(version, qt_ver_str, extension))
 
@@ -849,6 +877,15 @@ class MetadataFactory:
             module, _arch = to_module_arch(name)
             if _arch == arch:
                 modules.add(cast(str, module))
+
+        # For Qt 6.8+, check extensions
+        if version >= Version("6.8.0"):
+            # Add known extensions
+            extensions = ArchiveId.EXTENSIONS_AS_MODULES_680
+            for ext in extensions:
+                if self._check_extension_metadata(ext, version, arch):
+                    modules.add(ext)
+
         return sorted(modules)
 
     @staticmethod
@@ -977,6 +1014,26 @@ class MetadataFactory:
         if not selected_arch:
             raise EmptyMetadata("No default desktop architecture available")
         return selected_arch
+
+    def _check_extension_metadata(self, module: str, version: Version, arch: str) -> Optional[Dict[str, Dict[str, str]]]:
+        """Check if module exists as an extension package"""
+        if version < Version("6.8.0"):
+            return None
+
+        archive_id = ArchiveId("qt", self.archive_id.host, self.archive_id.target)
+        ver_str = f"{version.major}{version.minor}0"  # Extension versions use 680, 681 etc
+        ext_url = archive_id.to_extension_url(module, ver_str, arch)
+        if not ext_url:
+            return None
+
+        try:
+            xml = self.fetch_http(posixpath.join(ext_url, "Updates.xml"))
+            modules = xml_to_modules(xml, self._has_nonempty_downloads)
+            if modules:
+                self.logger.info(f"Found Qt module '{module}' as an extension package")
+            return modules
+        except ArchiveDownloadError:
+            return None
 
 
 def suggested_follow_up(meta: MetadataFactory) -> List[str]:
