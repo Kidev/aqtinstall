@@ -435,9 +435,13 @@ def expected_windows_desktop_plus_wasm_5140(is_wasm_threaded: bool) -> Dict:
         ("--modules 5.14.0 win64_msvc2017_64", False, ["modules_by_arch", "win64_msvc2017_64"]),
         ("--modules 6.5.0 wasm_singlethread", True, ["modules_by_arch", "wasm_singlethread"]),
         ("--modules 6.5.0 wasm_multithread", True, ["modules_by_arch", "wasm_multithread"]),
+        ("--modules 6.7.3 wasm_singlethread", True, ["modules_by_arch", "wasm_singlethread"]),
+        ("--modules 6.8.0 wasm_multithread", True, ["modules_by_arch", "wasm_multithread"]),
         ("--arch latest", True, ["architectures"]),
         ("--spec 5.14 --arch latest", False, ["architectures"]),
         ("--arch 5.14.0", False, ["architectures"]),
+        ("--arch 6.7.3", True, ["architectures"]),  # Tests all_os/wasm URL pattern
+        ("--arch 6.8.0", True, ["architectures"]),  # Tests versioned folder structure
     ),
 )
 def test_list_qt_cli(
