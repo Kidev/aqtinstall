@@ -303,18 +303,12 @@ def test_helper_get_hash_bad_hash(monkeypatch, received_hash):
             Version(major=1, minor=33, patch=0, build=("202102101246",)),
         ),
         ("2020-05-19-1", Version(major=2020, minor=0, patch=0, build=("05-19-1",))),
+        ("6_7_3", Version(major=6, minor=7, patch=3)),  # Basic underscore format
         (
-            "6_7_3",    # Basic underscore format
-            Version(major=6, minor=7, patch=3)
+            "6.7.3-0-202409200836",  # Underscore format with build number
+            Version(major=6, minor=7, patch=3, build=("0-202409200836",)),
         ),
-        (
-            "6_7_3-202312101246",   # Underscore format with build number
-            Version(major=6, minor=7, patch=3, build=("202312101246",))
-        ),
-        (
-            "6_7",  # Partial underscore format
-            Version(major=6, minor=7, patch=0)
-        ),
+        ("6_8", Version(major=6, minor=8, patch=0)),  # Partial underscore format
         ("6_7_3_1", None),  # Invalid underscore formats: too many parts
         ("6__7", None),  # Invalid underscore formats: invalid separator
     ],

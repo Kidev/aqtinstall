@@ -189,6 +189,8 @@ def test_list_versions_tools(monkeypatch, spec_regex, os_name, target, in_file, 
             "windows-5152-src-doc-example-expect.json",
         ),
         ("6.2.0", "", "windows-620-update.xml", "windows-620-expect.json"),
+        ("6.7.3", "wasm_multithread", "windows-673-wasm-multi-update.xml", "windows-673-wasm-multi-expect.json"),
+        ("6.8.0", "wasm_singlethread", "windows-680-wasm-single-update.xml", "windows-680-wasm-single-expect.json"),
     ],
 )
 def test_list_qt_modules(monkeypatch, version: str, extension: str, in_file: str, expect_out_file: str):
