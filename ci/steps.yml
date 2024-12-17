@@ -262,8 +262,6 @@ steps:
       }
       if ('$(ARCH)' -like '*msvc2022*') {
         Write-Host '##vso[task.setvariable variable=VSVER]2022'
-        # Set C++20 and __cplusplus flags for MSVC 2022
-        Write-Host '##vso[task.setvariable variable=QMAKE_FLAGS]/std:c++20 /Zc:__cplusplus'
       } elseif ('$(ARCH)' -like '*msvc2019*') {
         Write-Host '##vso[task.setvariable variable=VSVER]2019'
       } elseif ('$(ARCH)' -like '*msvc2017*') {
@@ -300,110 +298,50 @@ steps:
     displayName: Build test with qmake for Linux and macOS w/o extra module
   # Update the build step to make handling Qt6.8+ with WASM possible
   - powershell: |
-      Write-Host "Current toolchain: $env:TOOLCHAIN"
-      Write-Host "Is autodesktop: $env:IS_AUTODESKTOP"
-      Write-Host "Architecture: $env:ARCH"
+      if ( $env:TOOLCHAIN -eq 'MSVC' ) {
+        # Load modules from cache  
+        $Env:PSModulePath = '$(MODULES_FOLDER)', $Env:PSModulePath -join [System.IO.Path]::PathSeparator
+        Write-Host $Env:PSModulePath
+        Import-Module "Pscx"
+        Import-Module "VSSetup"
 
-      # Load modules from cache  
-      $Env:PSModulePath = '$(MODULES_FOLDER)', $Env:PSModulePath -join [System.IO.Path]::PathSeparator
-      Write-Host "PSModulePath: $Env:PSModulePath"
-      
-      if ($env:TOOLCHAIN -eq 'MSVC') {
-        # Import required modules
-        Import-Module "Pscx" -ErrorAction Stop
-        Import-Module "VSSetup" -ErrorAction Stop
+        Import-VisualStudioVars -VisualStudioVersion $(VSVER) -Architecture $(ARCHITECTURE)
+        $env:Path += ";$(WIN_QT_BINDIR)"
+        mkdir $(Build.BinariesDirectory)\tests
+        cd $(Build.BinariesDirectory)\tests
+        7z x $(Build.SourcesDirectory)\ci\helloworld.7z
 
-        # Verify VS installation 
-        $vsPath = $env:VS2022_PATH
-        if (-not $vsPath -and $env:VSVER -eq '2022') {
+        Write-Host "Current toolchain: $env:TOOLCHAIN"
+        Write-Host "Is autodesktop: $(IS_AUTODESKTOP)"
+        Write-Host "Architecture: $(ARCH)"
+        Write-Host "PSModulePath: $Env:PSModulePath"
+
+        # Get VS2022 path
+        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version '[17.0,18.0)' -property installationPath
+        if (-not $vsPath) {
           Write-Error "Visual Studio 2022 path not found. Make sure VS2022 installation step succeeded."
           exit 1
         }
+        Write-Host "Visual Studio 2022 found at: $vsPath"
 
-        # Import Visual Studio environment
-        Import-VisualStudioVars -VisualStudioVersion $(VSVER) -Architecture $(ARCHITECTURE) -ErrorAction Stop
-        
-        # Update PATH for Qt
-        $env:Path += ";$(WIN_QT_BINDIR)"
-        Write-Host "Updated Path: $env:Path"
-        
-        mkdir $(Build.BinariesDirectory)\tests -ErrorAction SilentlyContinue
-        cd $(Build.BinariesDirectory)\tests
-        7z x $(Build.SourcesDirectory)\ci\helloworld.7z
-        cd ..
-        
-        if ('$(VSVER)' -eq '2022') {
-          qmake "QMAKE_CXXFLAGS += $(QMAKE_FLAGS)" $(Build.BinariesDirectory)\tests\helloworld
+        # Add CONFIG+=c++20 for Qt6 builds
+        if ('$(QT_VERSION)' -like '6*') {
+          qmake "CONFIG+=c++20" $(Build.BinariesDirectory)\tests\helloworld
         } else {
           qmake $(Build.BinariesDirectory)\tests\helloworld
         }
-        
         jom
-      } elseif ($env:ARCH.StartsWith('wasm_')) {
-        Write-Host "WebAssembly build detected"
-        
-        # For WebAssembly, we need both WASM Qt and desktop Qt (MinGW)
-        if (-not $env:IS_AUTODESKTOP -eq 'True') {
-          Write-Error "WebAssembly builds require --autodesktop to be set"
-          exit 1
-        }
-
-        # Desktop Qt should be in WIN_AUTODESK_QT_BINDIR for autodesktop installs
-        if (-not (Test-Path "$(WIN_AUTODESK_QT_BINDIR)\qmake.exe")) {
-          Write-Error "Desktop Qt not found at $(WIN_AUTODESK_QT_BINDIR)"
-          exit 1
-        }
-
-        # Add both WASM and desktop Qt to path
-        $env:Path = "$(WIN_AUTODESK_QT_BINDIR);$(WIN_QT_BINDIR);$env:Path"
-        Write-Host "Updated Path for WebAssembly build: $env:Path"
-
-        mkdir $(Build.BinariesDirectory)\tests -ErrorAction SilentlyContinue
-        cd $(Build.BinariesDirectory)\tests
-        
-        # Choose correct example based on Qt version
-        if ('$(QT_VERSION)' -like '6*') {
-          7z x $(Build.SourcesDirectory)\ci\openglwindow_qt6.7z
+      } elseif ( $env:TOOLCHAIN -eq 'MINGW' ) {
+        python -m aqt install-tool $(if (($QT_BASE_MIRROR + "") -ne "") { "-b $QT_BASE_MIRROR" } else {""}) `
+          --outputdir $(Build.BinariesDirectory)/Qt $(HOST) desktop $(MINGW_TOOL_NAME) qt.tools.$(MINGW_VARIANT)
+        if ($?) {
+          Write-Host 'Successfully installed tools_mingw'
         } else {
-          7z x $(Build.SourcesDirectory)\ci\openglwindow.7z
+          throw 'Failed to install tools_mingw'
         }
-
-        cd $(Build.BinariesDirectory)\tests\openglwindow
-
-        # Configure with qtconf for WASM
-        Write-Host "Running qmake with WASM configuration..."
-        & "$(WIN_AUTODESK_QT_BINDIR)\qmake.exe" -qtconf "$(WIN_QT_BINDIR)\target_qt.conf" .
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "qmake failed with exit code $LASTEXITCODE"
-          exit 1
-        }
-
-        make
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "make failed with exit code $LASTEXITCODE"
-          exit 1
-        }
-
-      } elseif ($env:TOOLCHAIN -eq 'MINGW') {
-        Write-Host "MinGW build detected"
-        
-        # Install MinGW tools if needed
-        $toolInstallCmd = "python -m aqt install-tool"
-        if ($QT_BASE_MIRROR) { $toolInstallCmd += " -b $QT_BASE_MIRROR" }
-        $toolInstallCmd += " --outputdir $(Build.BinariesDirectory)/Qt $(HOST) desktop $(MINGW_TOOL_NAME) qt.tools.$(MINGW_VARIANT)"
-        
-        Invoke-Expression $toolInstallCmd
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Failed to install MinGW tools"
-          exit 1
-        }
-        Write-Host "Successfully installed MinGW tools"
-
-        # Update path to include MinGW and Qt
-        $env:Path = "$(Build.BinariesDirectory)\Qt\Tools\$(MINGW_FOLDER)\bin;$(WIN_QT_BINDIR);$env:Path"
-        Write-Host "Updated Path: $env:Path"
-
-        mkdir $(Build.BinariesDirectory)\tests -ErrorAction SilentlyContinue
+        Set-Item -Path Env:Path -Value ("$(Build.BinariesDirectory)\Qt\Tools\$(MINGW_FOLDER)\bin;$(WIN_QT_BINDIR);" + $Env:Path)
+        Write-Host "Path == " + $env:Path
+        mkdir $(Build.BinariesDirectory)\tests
         cd $(Build.BinariesDirectory)\tests
         7z x $(Build.SourcesDirectory)\ci\helloworld.7z
         cd ..
