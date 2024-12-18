@@ -8,11 +8,35 @@ jobs:
     demands:
     - Agent.OS -equals Windows_NT
   steps:
+    - powershell: |
+        # Set ExecutionPolicy to allow script execution
+        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
+      displayName: 'Set PowerShell Execution Policy'
+      
     - task: UsePythonVersion@0
       inputs:
-        versionSpec: '3.12'
+        versionSpec: '3.x'
         addToPath: true
         token: $(GITHUB_TOKEN_AZURE)
+        
+    # Fallback in case UsePythonVersion fails
+    - powershell: |
+        if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+          Write-Host "Python not found via task, attempting manual installation..."
+          # Check if Python is installed in standard locations
+          $pythonPath = "C:\Python3\python.exe"
+          if (Test-Path $pythonPath) {
+            Write-Host "Found Python at $pythonPath"
+            $env:Path = "$env:Path;C:\Python3"
+            Write-Host "##vso[task.setvariable variable=PATH]$env:Path"
+          } else {
+            Write-Error "Python not found. Please install Python 3.x manually on the agent."
+            exit 1
+          }
+        }
+        python --version
+      displayName: 'Verify Python Installation'
+      
     - bash: python ci/generate_azure_pipelines_matrices.py
       name: mtrx
       displayName: Generate test matrices and set variables in Azure Pipelines
