@@ -10,9 +10,9 @@ jobs:
   steps:
     - task: UsePythonVersion@0
       inputs:
-        versionSpec: '3.x'   # Changed from 3.12 to 3.x
+        versionSpec: '3.12'
         addToPath: true
-        token: $(GITHUB_TOKEN)  # Added GitHub token
+        token: $(GITHUB_TOKEN_AZURE)
     - bash: python ci/generate_azure_pipelines_matrices.py
       name: mtrx
       displayName: Generate test matrices and set variables in Azure Pipelines
