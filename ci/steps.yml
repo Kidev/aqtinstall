@@ -3,18 +3,25 @@ steps:
     inputs:
       versionSpec: $(PYTHON_VERSION)
       architecture: 'x64'
+
   - powershell: |
       pip install -e .
     displayName: install package
 
-  # Add Visual Studio installer first
   - task: VSBuild@1
     inputs:
       solution: '**/*.sln'
-      vsVersion: ${{ if eq(variables['VSVER'], '2019') }}'16.0'${{ else }}'17.0'
+      ${{ if eq(variables['VSVER'], '2019') }}:
+        vsVersion: '16.0'
+      ${{ else }}:
+        vsVersion: '17.0'
       msbuildArchitecture: 'x64'
     displayName: 'Ensure Visual Studio components'
-    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'))
+    condition: >-
+      and(
+        eq(variables['Agent.OS'], 'Windows_NT'),
+        eq(variables['TOOLCHAIN'], 'MSVC')
+      )
 
   - powershell: |
       $vsVersion = if ('$(VSVER)' -eq '2019') { '[16.0,17.0)' } else { '[17.0,18.0)' }
@@ -28,7 +35,11 @@ steps:
       # Set environment variable for later steps
       Write-Host "##vso[task.setvariable variable=VS_PATH]$vsPath"
     displayName: 'Verify Visual Studio Installation'
-    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'))
+    condition: >-
+      and(
+        eq(variables['Agent.OS'], 'Windows_NT'),
+        eq(variables['TOOLCHAIN'], 'MSVC')
+      )
 
   # Install linux dependencies
   - bash: |
