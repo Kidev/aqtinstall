@@ -2,21 +2,9 @@ trigger: [master]
 pr: [master]
 
 jobs:
-- job: MatricesGenerator
-  pool:
-    name: kidev-pool
-    demands:
-    - Agent.OS -equals Windows_NT
-  steps:
-    - powershell: |
-        python ci/generate_azure_pipelines_matrices.py
-      name: mtrx
-      displayName: Generate test matrices and set variables in Azure Pipelines
-
 - job: Windows
-  dependsOn: MatricesGenerator
   pool:
-    name: kidev-pool
+    name: Default
     demands:
     - Agent.OS -equals Windows_NT
   strategy:
@@ -25,5 +13,19 @@ jobs:
     MODULES_FOLDER: '$(System.DefaultWorkingDirectory)\CachedPowershellModules'
     startYear: $[format('{0:yyyy}', pipeline.startTime)]
     startMonth: $[format('{0:MM}', pipeline.startTime)]
+    BUILD_SOURCESDIRECTORY: 'C:\Work\azure_runner\_work\1\s'
+    BUILD_BINARIESDIRECTORY: 'C:\Work\azure_runner\_work\1\b'
   steps:
+    # Generate matrices first
+    - powershell: |
+        python ci/generate_azure_pipelines_matrices.py
+      name: mtrx
+      displayName: Generate test matrices
+
+    # Install package
+    - powershell: |
+        pip install -e .
+      displayName: Install package
+      
+    # Main steps template
     - template: ci/steps.yml
