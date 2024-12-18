@@ -281,7 +281,7 @@ for job_queue, host, desk_arch, target, qt_version in (
     for wasm_arch in ("wasm_singlethread", "wasm_multithread"):
         job_queue.append(
             BuildJob("install-qt", qt_version, host, target, wasm_arch, wasm_arch,
-                     is_autodesktop=True, emsdk_version=f"sdk-{BuildJob.emsdk_version_for_qt(qt_version)}-64bit", autodesk_arch_folder=desk_arch)
+                     is_autodesktop=True, emsdk_version=f"sdk-{BuildJob.emsdk_version_for_qt(qt_version)}-64bit", autodesk_arch_folder=desk_arch, mingw_variant="win64_mingw1310")
         )
 
 # mobile SDK

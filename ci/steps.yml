@@ -15,7 +15,7 @@ steps:
       msbuildArchitecture: 'x64'
     displayName: 'Ensure Visual Studio components'
     condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'))
-    
+
   - powershell: |
       $vsVersion = if ('$(VSVER)' -eq '2019') { '[16.0,17.0)' } else { '[17.0,18.0)' }
       $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version $vsVersion -property installationPath
