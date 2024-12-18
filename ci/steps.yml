@@ -7,6 +7,29 @@ steps:
       pip install -e .
     displayName: install package
 
+  # Add Visual Studio installer first
+  - task: VSBuild@1
+    inputs:
+      solution: '**/*.sln'
+      vsVersion: ${{ if eq(variables['VSVER'], '2019') }}'16.0'${{ else }}'17.0'
+      msbuildArchitecture: 'x64'
+    displayName: 'Ensure Visual Studio components'
+    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'))
+
+  - powershell: |
+      $vsVersion = if ('$(VSVER)' -eq '2019') { '[16.0,17.0)' } else { '[17.0,18.0)' }
+      $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version $vsVersion -property installationPath
+      if (-not $vsPath) {
+        Write-Error "Visual Studio $(VSVER) is not installed."
+        exit 1
+      }
+      Write-Host "Visual Studio $(VSVER) found at: $vsPath"
+      
+      # Set environment variable for later steps
+      Write-Host "##vso[task.setvariable variable=VS_PATH]$vsPath"
+    displayName: 'Verify Visual Studio Installation'
+    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'))
+
   # Install linux dependencies
   - bash: |
       sudo apt-get update
@@ -194,9 +217,9 @@ steps:
       qmake $(Build.BinariesDirectory)/tests/accelbubble
       make
     condition: |
-        and(eq(variables['TARGET'], 'ios'), 
-            ne(variables['SUBCOMMAND'], 'list'), 
-            ne(variables['SUBCOMMAND'], 'install-tool'))
+      and(eq(variables['TARGET'], 'ios'), 
+          ne(variables['SUBCOMMAND'], 'list'), 
+          ne(variables['SUBCOMMAND'], 'install-tool'))
     displayName: Build accelbubble example application to test for ios
 
   ##----------------------------------------------------
@@ -210,6 +233,7 @@ steps:
         and(eq(variables['Agent.OS'], 'Windows_NT'), 
             eq(variables['SUBCOMMAND'], 'install-qt'))
     displayName: Cache Powershell Modules
+
   # On cache miss: Download Powershell Modules to $MODULES_FOLDER
   - powershell: |
       Install-PackageProvider NuGet -Force
@@ -237,7 +261,9 @@ steps:
       } else {
         Write-Host '##vso[task.setvariable variable=ARCHITECTURE]x86'
       }
-      if ('$(ARCH)' -like '*msvc2019*') {
+      if ('$(ARCH)' -like '*msvc2022*') {
+        Write-Host '##vso[task.setvariable variable=VSVER]2022'
+      } elseif ('$(ARCH)' -like '*msvc2019*') {
         Write-Host '##vso[task.setvariable variable=VSVER]2019'
       } elseif ('$(ARCH)' -like '*msvc2017*') {
         Write-Host '##vso[task.setvariable variable=VSVER]2017'
@@ -271,6 +297,7 @@ steps:
           eq(variables['SUBCOMMAND'], 'install-qt')
         )
     displayName: Build test with qmake for Linux and macOS w/o extra module
+
   - powershell: |
       if ( $env:TOOLCHAIN -eq 'MSVC' ) {
         # Load modules from cache  
@@ -284,8 +311,27 @@ steps:
         mkdir $(Build.BinariesDirectory)\tests
         cd $(Build.BinariesDirectory)\tests
         7z x $(Build.SourcesDirectory)\ci\helloworld.7z
-        cd ..
-        qmake $(Build.BinariesDirectory)\tests\helloworld
+
+        Write-Host "Current toolchain: $env:TOOLCHAIN"
+        Write-Host "Is autodesktop: $(IS_AUTODESKTOP)"
+        Write-Host "Architecture: $(ARCH)"
+        Write-Host "PSModulePath: $Env:PSModulePath"
+
+        # Get VS path based on version
+        $vsVersion = if ('$(VSVER)' -eq '2019') { '[16.0,17.0)' } else { '[17.0,18.0)' }
+        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version $vsVersion -property installationPath
+        if (-not $vsPath) {
+          Write-Error "Visual Studio $(VSVER) path not found. Make sure VS$(VSVER) installation step succeeded."
+          exit 1
+        }
+        Write-Host "Visual Studio $(VSVER) found at: $vsPath"
+
+        # Add CONFIG+=c++20 for Qt6 builds
+        if ('$(QT_VERSION)' -like '6*') {
+          qmake "CONFIG+=c++20" $(Build.BinariesDirectory)\tests\helloworld
+        } else {
+          qmake $(Build.BinariesDirectory)\tests\helloworld
+        }
         jom
       } elseif ( $env:TOOLCHAIN -eq 'MINGW' ) {
         python -m aqt install-tool $(if (($QT_BASE_MIRROR + "") -ne "") { "-b $QT_BASE_MIRROR" } else {""}) `
@@ -310,70 +356,70 @@ steps:
         eq(variables['MODULE'], ''),
         eq(variables['SUBCOMMAND'], 'install-qt')
       )
-    displayName: build test with qmake w/o extra module
+    displayName: build test with qmake
 
-# When --archives non-empty
+  # When --archives non-empty
   - script: |
-        set -ex
-        rm -rf $(Build.BinariesDirectory)/tests
-        mkdir $(Build.BinariesDirectory)/tests
-        (cd $(Build.BinariesDirectory)/tests && 7zr x $(Build.SourcesDirectory)/ci/helloworld_qttools.7z)
-        export PATH=$(QT_BINDIR):$PATH
-        qmake -d $(Build.BinariesDirectory)/tests/helloworld_qttools
-        make
+      set -ex
+      rm -rf $(Build.BinariesDirectory)/tests
+      mkdir $(Build.BinariesDirectory)/tests
+      (cd $(Build.BinariesDirectory)/tests && 7zr x $(Build.SourcesDirectory)/ci/helloworld_qttools.7z)
+      export PATH=$(QT_BINDIR):$PATH
+      qmake -d $(Build.BinariesDirectory)/tests/helloworld_qttools
+      make
     condition: |
-        and(
-          eq( variables['TARGET'], 'desktop' ),
-          not( startsWith( variables['ARCH'], 'wasm_' ) ),
-          or(
-            eq(variables['Agent.OS'], 'Linux'),
-            eq(variables['Agent.OS'], 'Darwin')
-          ),
-          contains(variables['SUBARCHIVES'], 'qttools'),
-          eq(variables['SUBCOMMAND'], 'install-qt')
-        )
+      and(
+        eq( variables['TARGET'], 'desktop' ),
+        not( startsWith( variables['ARCH'], 'wasm_' ) ),
+        or(
+          eq(variables['Agent.OS'], 'Linux'),
+          eq(variables['Agent.OS'], 'Darwin')
+        ),
+        contains(variables['SUBARCHIVES'], 'qttools'),
+        eq(variables['SUBCOMMAND'], 'install-qt')
+      )
     displayName: build test with qmake for Linux and macOS with specific Qt modules (QT += uitools)
   - powershell: |
-        if ( $env:TOOLCHAIN -eq 'MSVC' ) {
-          # Load modules from cache
-          $Env:PSModulePath = '$(MODULES_FOLDER)', $Env:PSModulePath -join [System.IO.Path]::PathSeparator
-          Write-Host $Env:PSModulePath
-          Import-Module "Pscx"
-          Import-Module "VSSetup"
+      if ( $env:TOOLCHAIN -eq 'MSVC' ) {
+        # Load modules from cache
+        $Env:PSModulePath = '$(MODULES_FOLDER)', $Env:PSModulePath -join [System.IO.Path]::PathSeparator
+        Write-Host $Env:PSModulePath
+        Import-Module "Pscx"
+        Import-Module "VSSetup"
 
-          Import-VisualStudioVars -VisualStudioVersion $(VSVER) -Architecture $(ARCHITECTURE)
-          $env:Path += ";$(WIN_QT_BINDIR)"
-          try { rm -r -fo $(Build.BinariesDirectory)\tests } catch { $Error.Clear() }
-          mkdir $(Build.BinariesDirectory)\tests
-          cd $(Build.BinariesDirectory)\tests
-          7z x $(Build.SourcesDirectory)\ci\helloworld_qttools.7z
-          qmake -d $(Build.BinariesDirectory)\tests\helloworld_qttools
-          nmake
-        } elseif ( $env:TOOLCHAIN -eq 'MINGW' ) {
-          Set-Item -Path Env:Path -Value ("$(Build.BinariesDirectory)\Qt\Tools\$(MINGW_FOLDER)\bin;$(WIN_QT_BINDIR);" + $Env:Path)
-          Write-Host "Path == " + $env:Path
-          if (![bool] (Get-Command -ErrorAction Ignore -Type Application mingw32-make)) {
-            python -m aqt install-tool $(if (($QT_BASE_MIRROR + "") -ne "") { "-b $QT_BASE_MIRROR" } else {""}) `
-               --outputdir $(Build.BinariesDirectory)/Qt $(HOST) desktop $(MINGW_TOOL_NAME) qt.tools.$(MINGW_VARIANT)
-            if ($?) {
-              Write-Host 'Successfully installed tools_mingw'
-            } else {
-              throw 'Failed to install tools_mingw'
-            }
+        Import-VisualStudioVars -VisualStudioVersion $(VSVER) -Architecture $(ARCHITECTURE)
+        $env:Path += ";$(WIN_QT_BINDIR)"
+        try { rm -r -fo $(Build.BinariesDirectory)\tests } catch { $Error.Clear() }
+        mkdir $(Build.BinariesDirectory)\tests
+        cd $(Build.BinariesDirectory)\tests
+        7z x $(Build.SourcesDirectory)\ci\helloworld_qttools.7z
+        qmake -d $(Build.BinariesDirectory)\tests\helloworld_qttools
+        nmake
+      } elseif ( $env:TOOLCHAIN -eq 'MINGW' ) {
+        Set-Item -Path Env:Path -Value ("$(Build.BinariesDirectory)\Qt\Tools\$(MINGW_FOLDER)\bin;$(WIN_QT_BINDIR);" + $Env:Path)
+        Write-Host "Path == " + $env:Path
+        if (![bool] (Get-Command -ErrorAction Ignore -Type Application mingw32-make)) {
+          python -m aqt install-tool $(if (($QT_BASE_MIRROR + "") -ne "") { "-b $QT_BASE_MIRROR" } else {""}) `
+             --outputdir $(Build.BinariesDirectory)/Qt $(HOST) desktop $(MINGW_TOOL_NAME) qt.tools.$(MINGW_VARIANT)
+          if ($?) {
+            Write-Host 'Successfully installed tools_mingw'
+          } else {
+            throw 'Failed to install tools_mingw'
           }
-          try { rm -r -fo $(Build.BinariesDirectory)\tests } catch { $Error.Clear() }
-          mkdir $(Build.BinariesDirectory)\tests
-          cd $(Build.BinariesDirectory)\tests
-          7z x $(Build.SourcesDirectory)\ci\helloworld_qttools.7z
-          qmake -d $(Build.BinariesDirectory)\tests\helloworld_qttools
-          mingw32-make
         }
+        try { rm -r -fo $(Build.BinariesDirectory)\tests } catch { $Error.Clear() }
+        mkdir $(Build.BinariesDirectory)\tests
+        cd $(Build.BinariesDirectory)\tests
+        7z x $(Build.SourcesDirectory)\ci\helloworld_qttools.7z
+        qmake -d $(Build.BinariesDirectory)\tests\helloworld_qttools
+        mingw32-make
+      }
     condition: |
-        and(
-          eq( variables['Agent.OS'], 'Windows_NT'),
-          contains(variables['SUBARCHIVES'], 'qttools'),
-          eq(variables['SUBCOMMAND'], 'install-qt')
-        )
+      and(
+        eq( variables['Agent.OS'], 'Windows_NT'),
+        contains(variables['SUBARCHIVES'], 'qttools'),
+        eq(variables['SUBCOMMAND'], 'install-qt')
+      )
     displayName: build test with qmake with specific Qt modules (QT += uitools)
 
   - powershell: |
@@ -464,6 +510,27 @@ steps:
       $env:Path += ";$(WIN_QT_BINDIR)"
       echo "Add Qt/qmake to PATH at $(WIN_QT_BINDIR):" 
       echo "$env:Path"
+      
+      # Verify desktop Qt installation
+      $desktopQtBinPath = "$(WIN_AUTODESK_QT_BINDIR)"
+      if (!(Test-Path "$desktopQtBinPath\moc.exe")) {
+        Write-Error "Desktop Qt moc.exe not found at $desktopQtBinPath\moc.exe"
+        Write-Host "##vso[task.logissue type=error]Desktop Qt tools not found"
+        exit 1
+      }
+      
+      # Verify WebAssembly Qt configuration
+      $wasmQtConf = "$(WIN_QT_BINDIR)\target_qt.conf"
+      if (!(Test-Path $wasmQtConf)) {
+        Write-Error "WebAssembly target_qt.conf not found at $wasmQtConf"
+        Write-Host "##vso[task.logissue type=error]WebAssembly Qt config not found"
+        exit 1
+      }
+      
+      # Display and verify configuration
+      Write-Host "Current target_qt.conf content:"
+      Get-Content $wasmQtConf
+      
       if ('$(QT_VERSION)' -like '6*') {
         7z x $(Build.SourcesDirectory)\ci\openglwindow_qt6.7z
         echo "Inlined qmake.bat command is: $(WIN_AUTODESK_QT_BINDIR)\qmake -qtconf $(WIN_QT_BINDIR)\target_qt.conf $(Build.BinariesDirectory)\tests\openglwindow"
