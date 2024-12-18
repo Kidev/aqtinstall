@@ -2,7 +2,22 @@ trigger: [master]
 pr: [master]
 
 jobs:
+- job: MatricesGenerator
+  pool:
+    name: kidev-pool
+    demands:
+    - Agent.OS -equals Windows_NT
+  steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.12'
+        addToPath: true
+    - bash: python ci/generate_azure_pipelines_matrices.py
+      name: mtrx
+      displayName: Generate test matrices and set variables in Azure Pipelines
+
 - job: Windows
+  dependsOn: MatricesGenerator
   pool:
     name: kidev-pool
     demands:
