@@ -8,38 +8,23 @@ steps:
       pip install -e .
     displayName: install package
 
-  - task: VSBuild@1
-    inputs:
-      solution: '**/*.sln'
-      ${{ if eq(variables['VSVER'], '2019') }}:
-        vsVersion: '16.0'
-      ${{ else }}:
-        vsVersion: '17.0'
-      msbuildArchitecture: 'x64'
-    displayName: 'Ensure Visual Studio components'
-    condition: >-
-      and(
-        eq(variables['Agent.OS'], 'Windows_NT'),
-        eq(variables['TOOLCHAIN'], 'MSVC')
-      )
-
   - powershell: |
-      $vsVersion = if ('$(VSVER)' -eq '2019') { '[16.0,17.0)' } else { '[17.0,18.0)' }
-      $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version $vsVersion -property installationPath
-      if (-not $vsPath) {
-        Write-Error "Visual Studio $(VSVER) is not installed."
-        exit 1
-      }
-      Write-Host "Visual Studio $(VSVER) found at: $vsPath"
+      # Set execution policy for this process
+      Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
       
-      # Set environment variable for later steps
-      Write-Host "##vso[task.setvariable variable=VS_PATH]$vsPath"
-    displayName: 'Verify Visual Studio Installation'
-    condition: >-
-      and(
-        eq(variables['Agent.OS'], 'Windows_NT'),
-        eq(variables['TOOLCHAIN'], 'MSVC')
-      )
+      if ('win64_msvc2022_64' -like '*msvc*') {
+        Write-Host '##vso[task.setvariable variable=TOOLCHAIN]MSVC'
+        Write-Host '##vso[task.setvariable variable=VSVER]2022'
+        Write-Host '##vso[task.setvariable variable=ARCHITECTURE]amd64'
+      }
+      
+      # Create directories if they don't exist
+      $binDir = "$(BUILD_BINARIESDIRECTORY)\Qt\6.8.1\msvc2022_64\bin"
+      if (!(Test-Path $binDir)) {
+        New-Item -ItemType Directory -Path $binDir -Force
+      }
+    displayName: 'Configure build environment'
+    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['SUBCOMMAND'], 'install-qt'))
 
   # Install linux dependencies
   - bash: |
