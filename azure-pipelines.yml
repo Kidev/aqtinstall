@@ -2,23 +2,11 @@ trigger: [master]
 pr: [master]
 
 jobs:
-- job: MatricesGenerator
-  displayName: Matrices Generator
-  pool:
-    vmImage: 'kidev-pool'
-  steps:
-    - task: UsePythonVersion@0
-      inputs:
-        versionSpec: '3.12'
-        addToPath: true
-    - bash: python ci/generate_azure_pipelines_matrices.py
-      name: mtrx
-      displayName: Generate test matrices and set variables in Azure Pipelines
-
 - job: Windows
-  dependsOn: MatricesGenerator
   pool:
-    vmImage: 'kidev-pool'
+    name: kidev-pool
+    demands:
+    - Agent.OS -equals Windows_NT
   strategy:
     matrix: $[ dependencies.MatricesGenerator.outputs['mtrx.windows'] ]
   variables:
@@ -27,4 +15,3 @@ jobs:
     startMonth: $[format('{0:MM}', pipeline.startTime)]
   steps:
     - template: ci/steps.yml
-
