@@ -5,7 +5,7 @@ jobs:
 - job: MatricesGenerator
   displayName: Matrices Generator
   pool:
-    vmImage: 'ubuntu-22.04'
+    vmImage: 'kidev-pool'
   steps:
     - task: UsePythonVersion@0
       inputs:
@@ -15,21 +15,10 @@ jobs:
       name: mtrx
       displayName: Generate test matrices and set variables in Azure Pipelines
 
-- job: Mac
-  dependsOn: MatricesGenerator
-  pool:
-    vmImage: 'macOS-14'
-  strategy:
-    matrix: $[ dependencies.MatricesGenerator.outputs['mtrx.mac'] ]
-  steps:
-    - script: brew install p7zip
-      displayName: Install 7zip
-    - template: ci/steps.yml
-
 - job: Windows
   dependsOn: MatricesGenerator
   pool:
-    vmImage: 'windows-2022'
+    vmImage: 'kidev-pool'
   strategy:
     matrix: $[ dependencies.MatricesGenerator.outputs['mtrx.windows'] ]
   variables:
@@ -39,23 +28,3 @@ jobs:
   steps:
     - template: ci/steps.yml
 
-- job: Linux
-  dependsOn: MatricesGenerator
-  pool:
-    vmImage: 'ubuntu-22.04'
-  strategy:
-    matrix: $[ dependencies.MatricesGenerator.outputs['mtrx.linux'] ]
-  steps:
-    - template: ci/steps.yml
-
-#- job: Linux_ARM64
-#  dependsOn: MatricesGenerator
-#  pool:
-#    vmImage: 'ubuntu-22.04'
-#  container:
-#    image: ubuntu:22.04
-#    options: --platform linux/arm64
-#  strategy:
-#    matrix: $[ dependencies.MatricesGenerator.outputs['mtrx.linux_arm64'] ]
-#  steps:
-#    - template: ci/steps.yml
