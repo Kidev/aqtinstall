@@ -11,24 +11,24 @@ steps:
   - task: VSBuild@1
     inputs:
       solution: '**/*.sln'
-      vsVersion: '17.0'
+      vsVersion: ${{ if eq(variables['VSVER'], '2019') }}'16.0'${{ else }}'17.0'
       msbuildArchitecture: 'x64'
-    displayName: 'Ensure Visual Studio 2022 components'
-    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'), eq(variables['VSVER'], '2022'))
-
-  # Verify Visual Studio installation
+    displayName: 'Ensure Visual Studio components'
+    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'))
+    
   - powershell: |
-      $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version '[17.0,18.0)' -property installationPath
+      $vsVersion = if ('$(VSVER)' -eq '2019') { '[16.0,17.0)' } else { '[17.0,18.0)' }
+      $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version $vsVersion -property installationPath
       if (-not $vsPath) {
-        Write-Host "##vso[task.logissue type=error]Visual Studio 2022 is not installed."
+        Write-Error "Visual Studio $(VSVER) is not installed."
         exit 1
       }
-      Write-Host "Visual Studio 2022 found at: $vsPath"
+      Write-Host "Visual Studio $(VSVER) found at: $vsPath"
       
       # Set environment variable for later steps
-      Write-Host "##vso[task.setvariable variable=VS2022_PATH]$vsPath"
-    displayName: 'Verify Visual Studio 2022'
-    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'), eq(variables['VSVER'], '2022'))
+      Write-Host "##vso[task.setvariable variable=VS_PATH]$vsPath"
+    displayName: 'Verify Visual Studio Installation'
+    condition: and(eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['TOOLCHAIN'], 'MSVC'))
 
   # Install linux dependencies
   - bash: |
@@ -233,6 +233,7 @@ steps:
         and(eq(variables['Agent.OS'], 'Windows_NT'), 
             eq(variables['SUBCOMMAND'], 'install-qt'))
     displayName: Cache Powershell Modules
+
   # On cache miss: Download Powershell Modules to $MODULES_FOLDER
   - powershell: |
       Install-PackageProvider NuGet -Force
@@ -296,7 +297,7 @@ steps:
           eq(variables['SUBCOMMAND'], 'install-qt')
         )
     displayName: Build test with qmake for Linux and macOS w/o extra module
-  # Update the build step to make handling Qt6.8+ with WASM possible
+
   - powershell: |
       if ( $env:TOOLCHAIN -eq 'MSVC' ) {
         # Load modules from cache  
@@ -316,13 +317,14 @@ steps:
         Write-Host "Architecture: $(ARCH)"
         Write-Host "PSModulePath: $Env:PSModulePath"
 
-        # Get VS2022 path
-        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version '[17.0,18.0)' -property installationPath
+        # Get VS path based on version
+        $vsVersion = if ('$(VSVER)' -eq '2019') { '[16.0,17.0)' } else { '[17.0,18.0)' }
+        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -version $vsVersion -property installationPath
         if (-not $vsPath) {
-          Write-Error "Visual Studio 2022 path not found. Make sure VS2022 installation step succeeded."
+          Write-Error "Visual Studio $(VSVER) path not found. Make sure VS$(VSVER) installation step succeeded."
           exit 1
         }
-        Write-Host "Visual Studio 2022 found at: $vsPath"
+        Write-Host "Visual Studio $(VSVER) found at: $vsPath"
 
         # Add CONFIG+=c++20 for Qt6 builds
         if ('$(QT_VERSION)' -like '6*') {
@@ -356,7 +358,7 @@ steps:
       )
     displayName: build test with qmake
 
-# When --archives non-empty
+  # When --archives non-empty
   - script: |
       set -ex
       rm -rf $(Build.BinariesDirectory)/tests
