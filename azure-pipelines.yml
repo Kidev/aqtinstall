@@ -9,7 +9,6 @@ jobs:
     - Agent.OS -equals Windows_NT
   steps:
     - powershell: |
-        python --version
         python ci/generate_azure_pipelines_matrices.py
       name: mtrx
       displayName: Generate test matrices and set variables in Azure Pipelines
