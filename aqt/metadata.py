@@ -249,7 +249,7 @@ class ArchiveId:
         "mac": ["android", "desktop", "ios"],
         "linux": ["android", "desktop"],
         "linux_arm64": ["desktop"],
-        "all_os": ["wasm", "qt"],
+        "all_os": ["qt", "wasm"],
     }
     EXTENSIONS_REQUIRED_ANDROID_QT6 = {"x86_64", "x86", "armv7", "arm64_v8a"}
     ALL_EXTENSIONS = {
@@ -313,6 +313,8 @@ class ArchiveId:
         )
 
     def to_url(self) -> str:
+        if self.target == "desktop" and self.host in ("wasm_singlethread", "wasm_multithread"):
+            return "online/qtsdkrepository/all_os/wasm/"
         return "online/qtsdkrepository/{osarch}/{target}/".format(
             osarch=self.to_os_arch(),
             target=self.target,
@@ -622,6 +624,8 @@ class QtRepoProperty:
 
     @staticmethod
     def is_in_wasm_range(host: str, version: Version) -> bool:
+        if version >= Version("6.7.0"):
+            return True
         return (
             version in SimpleSpec(">=6.2.0,<6.5.0")
             or (host == "linux" and version in SimpleSpec(">=5.13,<6"))
