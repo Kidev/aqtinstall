@@ -428,7 +428,7 @@ class QtArchives:
         os_name = self.os_name
         if self.target == "android" and self.version >= Version("6.7.0"):
             os_name = "all_os"
-        if self.os_name == "windows":
+        elif self.os_name == "windows":
             os_name += "_x86"
         elif os_name != "linux_arm64" and os_name != "all_os" and os_name != "windows_arm64":
             os_name += "_x64"
@@ -456,21 +456,33 @@ class QtArchives:
                     "online/qtsdkrepository", os_name, "extensions", ext, self._version_str(), arch
                 )
                 extensions_xml_url = posixpath.join(extensions_target_folder, "Updates.xml")
-                extensions_xml_text = self._download_update_xml(extensions_xml_url)
-                update_xmls.append(UpdateXmls(extensions_target_folder, extensions_xml_text))
+                # The extension may or may not exist for this version and arch.
+                try:
+                    extensions_xml_text = self._download_update_xml(extensions_xml_url, True)
+                except ArchiveDownloadError:
+                    # In case _download_update_xml ignores the hash and tries to get the url.
+                    pass
+                if extensions_xml_text:
+                    self.logger.info("Found extension {}".format(ext))
+                    update_xmls.append(UpdateXmls(extensions_target_folder, extensions_xml_text))
 
         self._parse_update_xmls(update_xmls, target_packages)
 
-    def _download_update_xml(self, update_xml_path):
+    def _download_update_xml(self, update_xml_path, silent=False):
         """Hook for unit test."""
         if not Settings.ignore_hash:
             try:
-                xml_hash = get_hash(update_xml_path, Settings.hash_algorithm, self.timeout)
+                xml_hash = get_hash(update_xml_path, Settings.hash_algorithm, self.timeout, one_rep=silent)
             except ChecksumDownloadFailure:
-                self.logger.warning(
-                    "Failed to download checksum for the file 'Updates.xml'. This may happen on unofficial mirrors."
-                )
-                xml_hash = None
+                if silent:
+                    return None
+                else:
+                    self.logger.warning(
+                        "Failed to download checksum for the file '{}'. This may happen on unofficial mirrors.".format(
+                            update_xml_path
+                        )
+                    )
+                    xml_hash = None
         else:
             xml_hash = None
         return getUrl(posixpath.join(self.base, update_xml_path), self.timeout, xml_hash)
