@@ -143,6 +143,8 @@ def downloadBinaryFile(url: str, out: Path, hash_algo: str, exp: Optional[bytes]
                         fd.write(chunk)
                         hash.update(chunk)
                     fd.flush()
+            except requests.exceptions.ReadTimeout as e:
+                raise ArchiveConnectionError(f"Read timeout: {e.args}") from e
             except Exception as e:
                 raise ArchiveDownloadError(f"Download of {filename} has error: {e}") from e
             if exp is not None and hash.digest() != exp:
@@ -257,7 +259,7 @@ def altlink(url: str, alt: str) -> str:
 
 
 class MyQueueListener(QueueListener):
-    def __init__(self, queue):
+    def __init__(self, queue) -> None:
         handlers: List[Handler] = []
         super().__init__(queue, *handlers)
 
@@ -347,7 +349,7 @@ class SettingsClass:
         self.__dict__ = cls._shared_state
         return self
 
-    def __init__(self):
+    def __init__(self) -> None:
         if self.config is None:
             with self._lock:
                 if self.config is None:
