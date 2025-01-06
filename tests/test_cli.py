@@ -33,8 +33,8 @@ def expected_help(actual, prefix=None):
         "  install-* subcommands are commands that install components\n"
         "  list-* subcommands are commands that show available components\n"
         "\n"
-        "  {install-qt,install-tool,install-doc,install-example,install-src,list-qt,"
-        "list-tool,list-doc,list-example,list-src,help,version}\n"
+        "  {install-qt,install-tool,install-qt-commercial,install-doc,install-example,install-src,"
+        "list-qt,list-tool,list-doc,list-example,list-src,help,version}\n"
         "                        Please refer to each help message by using '--help' "
         "with each subcommand\n",
     )
@@ -524,19 +524,49 @@ def test_get_autodesktop_dir_and_arch_non_android(
 
 
 @pytest.mark.parametrize(
-    "cmd, commercial_translation, expected_err",
-    (
-        (
-            "install-qt-commercial desktop win64_msvc2022_64 6.8.0",
-            "install qt.qt6.680.win64_msvc2019_64",
+    "cmd, expected_arch, expected_err",
+    [
+        pytest.param(
+            "install-qt-commercial desktop {} 6.8.0",
+            {"windows": "win64_msvc2022_64", "linux": "gcc_64", "darwin": "clang_64"},
             "No Qt account credentials found. Either provide --user and --password or",
+            id="basic-commercial-install",
         ),
-    ),
+    ],
 )
-def test_cli_install_qt_commercial(capsys, cmd: str, commercial_translation: str, expected_err: str):
+def test_cli_install_qt_commercial(capsys, monkeypatch, cmd, expected_arch, expected_err):
+    """Test commercial Qt installation command"""
+    # Detect current platform
+    current_platform = sys.platform.system().lower()
+    if current_platform == "darwin":
+        current_platform = "mac"
+
+    # Format command with correct architecture for current platform
+    arch = expected_arch[current_platform]
+    cmd = cmd.format(arch)
+
+    # Mock qtaccount.ini check to simulate missing credentials
+    def mock_exists(*args, **kwargs):
+        return False
+
+    monkeypatch.setattr(Path, "exists", mock_exists)
+
     cli = Cli()
     cli._setup_settings()
-    assert 0 == cli.run(cmd.split())
+
+    # Run command and capture output
+    with pytest.raises(SystemExit):
+        cli.run(cmd.split())
+
     out, err = capsys.readouterr()
-    assert out.contains(commercial_translation)
-    assert err.contains(expected_err)
+
+    # Verify error message about missing credentials
+    assert expected_err in err
+
+    # Additional test with credentials
+    cmd_with_creds = f"{cmd} --user testuser --password testpass"
+    with pytest.raises(SystemExit):
+        cli.run(cmd_with_creds.split())
+
+    out, err = capsys.readouterr()
+    assert "Installing Qt commercial" in err
