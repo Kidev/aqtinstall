@@ -1396,14 +1396,13 @@ class CommercialInstaller:
     def _get_installer_filename(self) -> str:
         """Get OS-specific installer filename"""
         base = "qt-unified"
-        version = "4.6.1"  # Latest installer version
 
         if self.os_name == "windows":
-            return f"{base}-windows-x64-{version}-online.exe"
+            return f"{base}-windows-x64-online.exe"
         elif self.os_name == "mac":
-            return f"{base}-macOS-x64-{version}-online.dmg"
+            return f"{base}-macOS-x64-online.dmg"
         else:
-            return f"{base}-linux-x64-{version}-online.run"
+            return f"{base}-linux-x64-online.run"
 
     def _get_qt_account_path(self) -> Path:
         """Get OS-specific qtaccount.ini path"""
