@@ -1,3 +1,6 @@
+> [!WARNING]
+> Unmaintained, [this was merged into upstream](https://github.com/miurahr/aqtinstall/pull/846#issuecomment-2572398602)
+
 Another Qt installer(aqt)
 =========================
 
