@@ -42,6 +42,7 @@ from typing import List, Optional, Tuple, cast
 
 import aqt
 from aqt.archives import QtArchives, QtPackage, SrcDocExamplesArchives, ToolArchives
+from aqt.commercial import CommercialInstaller
 from aqt.exceptions import (
     AqtException,
     ArchiveChecksumError,
@@ -657,6 +658,26 @@ class Cli:
         )
         show_list(meta)
 
+    def run_install_qt_commercial(self, args):
+        """Execute commercial Qt installation"""
+        self.show_aqt_version()
+
+        target = args.target
+        arch = args.arch
+        version = args.version
+        username = args.user
+        password = args.password
+
+        commercial_installer = CommercialInstaller(
+            target=target, arch=arch, version=version, username=username, password=password, logger=self.logger
+        )
+
+        try:
+            commercial_installer.install()
+        except Exception as e:
+            self.logger.error(f"Commercial installation failed: {str(e)}")
+            raise
+
     def show_help(self, args=None):
         """Display help message"""
         self.parser.print_help()
@@ -750,6 +771,31 @@ class Cli:
         )
         self._set_common_options(install_tool_parser)
 
+    def _set_install_qt_commercial_parser(self, install_qt_commercial_parser):
+        install_qt_commercial_parser.set_defaults(func=self.run_install_qt_commercial)
+        install_qt_commercial_parser.add_argument(
+            "target",
+            choices=["desktop", "android", "ios"],
+            help="Target platform",
+        )
+        install_qt_commercial_parser.add_argument(
+            "arch",
+            help="Target architecture",
+        )
+        install_qt_commercial_parser.add_argument(
+            "version",
+            help="Qt version",
+        )
+        install_qt_commercial_parser.add_argument(
+            "--user",
+            help="Qt account username",
+        )
+        install_qt_commercial_parser.add_argument(
+            "--password",
+            help="Qt account password",
+        )
+        self._set_common_options(install_qt_commercial_parser)
+
     def _warn_on_deprecated_command(self, old_name: str, new_name: str) -> None:
         self.logger.warning(
             f"The command '{old_name}' is deprecated and marked for removal in a future version of aqt.\n"
@@ -800,6 +846,12 @@ class Cli:
 
         make_parser_it("install-qt", "Install Qt.", self._set_install_qt_parser, argparse.RawTextHelpFormatter)
         make_parser_it("install-tool", "Install tools.", self._set_install_tool_parser, None)
+        make_parser_it(
+            "install-qt-commercial",
+            "Install Qt commercial.",
+            self._set_install_qt_commercial_parser,
+            argparse.RawTextHelpFormatter,
+        )
         make_parser_sde("install-doc", "Install documentation.", self.run_install_doc, False)
         make_parser_sde("install-example", "Install examples.", self.run_install_example, False)
         make_parser_sde("install-src", "Install source.", self.run_install_src, True, is_add_modules=False)
