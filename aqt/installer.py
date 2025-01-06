@@ -669,9 +669,16 @@ class Cli:
         version = args.version
         username = args.user
         password = args.password
+        output_dir = args.outputdir
 
         commercial_installer = CommercialInstaller(
-            target=target, arch=arch, version=version, username=username, password=password, logger=self.logger
+            target=target,
+            arch=arch,
+            version=version,
+            username=username,
+            password=password,
+            output_dir=output_dir,
+            logger=self.logger,
         )
 
         try:
@@ -1380,6 +1387,7 @@ class CommercialInstaller:
         version: str,
         username: Optional[str] = None,
         password: Optional[str] = None,
+        output_dir: Optional[str] = None,
         logger: Optional[Logger] = None,
     ):
         self.target = target
@@ -1387,11 +1395,17 @@ class CommercialInstaller:
         self.version = Version(version)
         self.username = username
         self.password = password
+        self.output_dir = output_dir
         self.logger = logger or getLogger(__name__)
 
-        self.os_name = platform.system().lower()
-        if self.os_name == "darwin":
+        # Map platform names consistently
+        system = platform.system()
+        if system == "Darwin":
             self.os_name = "mac"
+        elif system == "Linux":
+            self.os_name = "linux"
+        else:
+            self.os_name = "windows"
 
         self.installer_filename = self._get_installer_filename()
         self.qt_account = self._get_qt_account_path()
@@ -1450,6 +1464,10 @@ class CommercialInstaller:
         # Authentication
         if self.username and self.password:
             cmd.extend(["--email", self.username, "--pw", self.password])
+
+        # Installation directory
+        if self.output_dir:
+            cmd.extend(["--root", str(self.output_dir)])
 
         # Unattended options
         cmd.extend(
