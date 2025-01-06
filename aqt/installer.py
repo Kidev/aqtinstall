@@ -812,6 +812,7 @@ class Cli:
         )
 
     def _make_all_parsers(self, subparsers: argparse._SubParsersAction) -> None:
+        """Creates all command parsers and adds them to the subparsers"""
 
         def make_parser_it(cmd: str, desc: str, set_parser_cmd, formatter_class):
             kwargs = {"formatter_class": formatter_class} if formatter_class else {}
@@ -846,6 +847,7 @@ class Cli:
             if cmd_type != "src":
                 parser.add_argument("-m", "--modules", action="store_true", help="Print list of available modules")
 
+        # Create install command parsers
         make_parser_it("install-qt", "Install Qt.", self._set_install_qt_parser, argparse.RawTextHelpFormatter)
         make_parser_it("install-tool", "Install tools.", self._set_install_tool_parser, None)
         make_parser_it(
@@ -858,6 +860,7 @@ class Cli:
         make_parser_sde("install-example", "Install examples.", self.run_install_example, False)
         make_parser_sde("install-src", "Install source.", self.run_install_src, True, is_add_modules=False)
 
+        # Create list command parsers
         self._make_list_qt_parser(subparsers)
         self._make_list_tool_parser(subparsers)
         make_parser_list_sde("list-doc", "List documentation archives available (use with install-doc)", "doc")
