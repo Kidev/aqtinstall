@@ -1,5 +1,5 @@
 > [!WARNING]
-> Unmaintained, [this was merged into upstream](https://github.com/miurahr/aqtinstall/pull/846#issuecomment-2572398602)
+> This fork is used to make PRs for the official aqtinstall, and may change/break without notice
 
 Another Qt installer(aqt)
 =========================
