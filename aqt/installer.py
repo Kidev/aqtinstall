@@ -1484,6 +1484,8 @@ class CommercialInstaller:
             self.logger.info("Starting Qt installation")
             cmd = self._get_install_command(installer_path)
 
+            self.logger.info(f"Running: {cmd}")
+
             try:
                 subprocess.check_call(cmd)
             except subprocess.CalledProcessError as e:

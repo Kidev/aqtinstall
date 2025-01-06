@@ -15,7 +15,8 @@ from aqt.metadata import MetadataFactory, SimpleSpec, Version
 def expected_help(actual, prefix=None):
     expected = (
         "usage: aqt [-h] [-c CONFIG]\n"
-        "           {install-qt,install-tool,install-doc,install-example,install-src,"
+        "           {install-qt,install-tool,install-qt-commercial,install-doc,install-example,"
+        "install-src,"
         "list-qt,list-tool,list-doc,list-example,list-src,help,version}\n"
         "           ...\n"
         "\n"
@@ -520,3 +521,22 @@ def test_get_autodesktop_dir_and_arch_non_android(
             ), "Expected autodesktop install message."
         elif expect["instruct"]:
             assert any("You can install" in line for line in err_lines), "Expected install instruction message."
+
+
+@pytest.mark.parametrize(
+    "cmd, commercial_translation, expected_err",
+    (
+        (
+            "install-qt-commercial desktop win64_msvc2022_64 6.8.0",
+            "install qt.qt6.680.win64_msvc2019_64",
+            "No Qt account credentials found. Either provide --user and --password or",
+        ),
+    ),
+)
+def test_cli_install_qt_commercial(capsys, cmd: str, commercial_translation: str, expected_err: str):
+    cli = Cli()
+    cli._setup_settings()
+    assert 0 == cli.run(cmd.split())
+    out, err = capsys.readouterr()
+    assert out.contains(commercial_translation)
+    assert err.contains(expected_err)
