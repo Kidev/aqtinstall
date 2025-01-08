@@ -1592,7 +1592,7 @@ class CommercialInstaller:
         return cmd
 
     def _exec_qt_installer(self, cmd: list[str], working_dir: str) -> None:
-        subprocess.run(shlex.escape(cmd), shell=False, check=True, cwd=working_dir)
+        subprocess.run(cmd, shell=False, check=True, cwd=working_dir)
 
     def install(self) -> None:
         if (
