@@ -38,7 +38,7 @@ import zipfile
 from logging import Logger, getLogger
 from logging.handlers import QueueHandler
 from pathlib import Path
-from shlex import shlex
+from shlex import shlex  # Remove this line
 from tempfile import TemporaryDirectory
 from typing import List, Optional, Tuple, cast
 
@@ -1592,7 +1592,7 @@ class CommercialInstaller:
         return cmd
 
     def _exec_qt_installer(self, cmd: list[str], working_dir: str) -> None:
-        subprocess.run(cmd, shell=False, check=True, cwd=working_dir)
+        cmd = [str(arg) for arg in cmd]
 
     def install(self) -> None:
         if (
