@@ -1606,7 +1606,7 @@ class CommercialInstaller:
 
         with tempfile.TemporaryDirectory(prefix="qt_install_") as temp_dir:
             temp_path = Path(temp_dir)
-            os.chmod(temp_dir, 0o700)
+            os.chmod(temp_dir, 0o600)
 
             installer_path = temp_path / self.installer_filename
             self.logger.info(f"Downloading Qt installer to {installer_path}")
