@@ -2075,6 +2075,14 @@ def test_install_qt_commercial(
     capsys, monkeypatch, cmd: str, arch_dict: dict[str, str], details: list[str], expected_command: str
 ) -> None:
     """Test commercial Qt installation command"""
+    # Mock the download installer method to do nothing
+    monkeypatch.setattr("aqt.installer.CommercialInstaller._download_installer", lambda *args: None)
+
+    def mock_resolve_path(self, installer_path: Path) -> list[str]:
+        return [installer_path]
+
+    monkeypatch.setattr("aqt.installer.CommercialInstaller._resolve_path", mock_resolve_path)
+
     current_platform = sys.platform.lower()
     arch = arch_dict[current_platform]
 
@@ -2086,5 +2094,12 @@ def test_install_qt_commercial(
 
     cli.run(formatted_cmd.split())
 
-    [out, _] = capsys.readouterr()
-    assert str(out).find(formatted_expected)
+    [out, err] = capsys.readouterr()
+
+    sys.stdout.write("\nout")
+    sys.stdout.write(out)
+    sys.stdout.write("\nerr")
+    sys.stdout.write(err)
+    sys.stdout.flush()
+
+    assert str(err).find(formatted_expected) >= 0

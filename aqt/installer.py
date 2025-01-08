@@ -38,6 +38,7 @@ import zipfile
 from logging import Logger, getLogger
 from logging.handlers import QueueHandler
 from pathlib import Path
+from shlex import shlex
 from tempfile import TemporaryDirectory
 from typing import List, Optional, Tuple, cast
 
@@ -1553,7 +1554,6 @@ class CommercialInstaller:
         resolved_path = str(installer_path.resolve(strict=True))
         return [resolved_path]
 
-    def _get_install_command(self, installer_path: Path) -> list[str]:
         cmd = self._resolve_path(installer_path)
 
         if self.username and self.password:
@@ -1592,7 +1592,7 @@ class CommercialInstaller:
         return cmd
 
     def _exec_qt_installer(self, cmd: list[str], working_dir: str) -> None:
-        subprocess.run(cmd, shell=False, check=True, cwd=working_dir)
+        subprocess.run(shlex.escape(cmd), shell=False, check=True, cwd=working_dir)
 
     def install(self) -> None:
         if (
@@ -1625,7 +1625,8 @@ class CommercialInstaller:
                     email_index = safe_cmd.index("--email")
                     if len(safe_cmd) > email_index + 1:
                         safe_cmd[email_index + 1] = "********"
-                self.logger.info(f"Running: {' '.join(safe_cmd)}")
+
+                self.logger.error(f"Running: {' '.join(safe_cmd)}")
 
                 self._exec_qt_installer(cmd, temp_dir)
 
