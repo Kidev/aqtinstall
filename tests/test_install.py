@@ -2061,7 +2061,20 @@ def test_installer_passes_base_to_metadatafactory(
     "cmd, arch_dict, details, expected_command",
     [
         (
-            "install-qt-commercial desktop {} 6.8.0 " "--outputdir ./install-qt-commercial " "--user {} --password {}",
+            "install-qt-commercial desktop {} 6.8.0 " "--outputdir .c " "--user {} --password {}",
+            {"windows": "win64_msvc2022_64", "linux": "linux_gcc_64", "mac": "clang_64"},
+            ["./install-qt-commercial", "qt6", "680"],
+            "qt-unified-{}-x64-online.run --email ******** --pw ******** --root {} "
+            "--accept-licenses --accept-obligations "
+            "--confirm-command "
+            "--auto-answer OperationDoesNotExistError=Ignore,OverwriteTargetDirectory=No,"
+            "stopProcessesForUpdates=Cancel,installationErrorWithCancel=Cancel,installationErrorWithIgnore=Ignore,"
+            "AssociateCommonFiletypes=Yes,telemetry-question=No install qt.{}.{}.{}",
+        ),
+        (
+            "install-qt-commercial --override --email {} --pw {} --root "
+            "/home/kidev/override_test "
+            "--accept-licenses --accept-obligations --confirm-command --auto-answer OperationDoesNotExistError=Ignore,OverwriteTargetDirectory=No,stopProcessesForUpdates=Cancel,installationErrorWithCancel=Cancel,installationErrorWithIgnore=Ignore,AssociateCommonFiletypes=Yes,telemetry-question=No install qt.qt6.681.linux_gcc_64",
             {"windows": "win64_msvc2022_64", "linux": "linux_gcc_64", "mac": "clang_64"},
             ["./install-qt-commercial", "qt6", "680"],
             "qt-unified-{}-x64-online.run --email ******** --pw ******** --root {} "
