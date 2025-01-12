@@ -387,6 +387,19 @@ class SettingsClass:
             with open(self.configfile, "r") as f:
                 self.config.read_file(f)
 
+        # Add cache_path if not present
+        if not self.config.has_option("qtcommercial", "cache_path"):
+            from aqt.commercial import CommercialInstaller
+
+            if not self.config.has_section("qtcommercial"):
+                self.config.add_section("qtcommercial")
+            self.config.set("qtcommercial", "cache_path", str(CommercialInstaller._get_qt_local_folder_path() / "cache"))
+
+    @property
+    def qt_installer_cache_path(self) -> str:
+        """Path for Qt installer cache."""
+        return self._get_config().get("qtcommercial", "cache_path")
+
     @property
     def archive_download_location(self):
         return self.config.get("aqt", "archive_download_location", fallback=".")
@@ -523,13 +536,6 @@ class SettingsClass:
     def qt_installer_telemetry(self) -> str:
         """Handle telemetry settings in Qt installer."""
         return self._get_config().get("qtcommercial", "telemetry", fallback="No")
-
-    @property
-    def qt_installer_cache_path(self) -> str:
-        """Path for Qt installer cache."""
-        return self._get_config().get(
-            "qtcommercial", "cache_path", fallback=str(Path.home() / ".cache" / "aqt" / "qtcommercial")
-        )
 
     @property
     def qt_installer_unattended(self) -> bool:

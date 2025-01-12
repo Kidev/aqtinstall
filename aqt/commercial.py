@@ -356,6 +356,16 @@ class CommercialInstaller:
         return Path.home() / ".local" / "share" / "Qt"
 
     @staticmethod
+    def _get_default_local_cache_path() -> Path:
+        os_name = CommercialInstaller._get_os_name()
+        if os_name == "windows":
+            appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+            return Path(appdata) / "aqt"
+        if os_name == "mac":
+            return Path.home() / "Library" / "Application Support" / "aqt"
+        return Path.home() / ".local" / "share" / "aqt"
+
+    @staticmethod
     def _get_qt_account_path() -> Path:
         return CommercialInstaller._get_qt_local_folder_path() / "qtaccount.ini"
 
