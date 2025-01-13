@@ -4,7 +4,7 @@ import platform
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from logging import Logger, getLogger
+from logging import getLogger, Logger
 from pathlib import Path
 from typing import List, Optional
 
@@ -139,16 +139,6 @@ class QtPackageManager:
             package_name = f"{self._get_base_package_name()}.{self.arch}"
 
         cmd = [
-            "--root",
-            install_path,
-            "--accept-licenses",
-            "--accept-obligations",
-            "--confirm-command",
-            "--auto-answer",
-            "OperationDoesNotExistError=Ignore,OverwriteTargetDirectory=No,"
-            "stopProcessesForUpdates=Cancel,installationErrorWithCancel=Cancel,"
-            "installationErrorWithIgnore=Ignore,AssociateCommonFiletypes=Yes,"
-            "telemetry-question=No",
             "install",
             package_name,
         ]
@@ -300,7 +290,7 @@ class CommercialInstaller:
             self.download_installer(installer_path, Settings.qt_installer_timeout)
 
             try:
-                cmd = None
+                cmd = []
                 if self.override:
                     cmd = self.build_command(str(installer_path), override=self.override, no_unattended=self.no_unattended)
                 else:
@@ -319,20 +309,15 @@ class CommercialInstaller:
 
                 self.logger.info(f"Running: {' '.join(cmd)}")
 
-                try:
-                    subprocess.run(cmd, shell=False, check=True, cwd=temp_dir, timeout=Settings.qt_installer_timeout)
-                except subprocess.TimeoutExpired:
-                    self.logger.error(f"Installation timed out after {Settings.qt_installer_timeout} seconds")
-                    raise
-                except subprocess.CalledProcessError as e:
-                    self.logger.error(f"Installation failed with exit code {e.returncode}")
-                    raise
-
-                self.logger.info("Qt installation completed successfully")
-
+                subprocess.run(cmd, shell=False, check=True, cwd=temp_dir, timeout=Settings.qt_installer_timeout)
+            except subprocess.TimeoutExpired:
+                self.logger.error(f"Installation timed out after {Settings.qt_installer_timeout} seconds")
+                raise
+            except subprocess.CalledProcessError as e:
+                self.logger.error(f"Installation failed with exit code {e.returncode}")
+                raise
             finally:
-                if installer_path.exists():
-                    installer_path.unlink()
+                self.logger.info("Qt installation completed successfully")
 
     @staticmethod
     def _get_os_name() -> str:
