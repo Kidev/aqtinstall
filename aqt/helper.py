@@ -26,7 +26,7 @@ import posixpath
 import secrets
 import sys
 from configparser import ConfigParser
-from logging import Handler, getLogger
+from logging import getLogger, Handler
 from logging.handlers import QueueListener
 from pathlib import Path
 from threading import Lock
@@ -363,6 +363,23 @@ class SettingsClass:
                     self.configfile = os.path.join(os.path.dirname(__file__), "settings.ini")
                     self.loggingconf = os.path.join(os.path.dirname(__file__), "logging.ini")
 
+                    self.config.read(self.configfile)
+                    if not self.config.has_section("qtcommercial"):
+                        self.config.add_section("qtcommercial")
+
+                    # Add cache_path with OS-specific default if not present
+                    if not self.config.has_option("qtcommercial", "cache_path"):
+
+                        cache_dir = get_default_local_cache_path()
+                        cache_path = str(cache_dir)
+                        self.config.set("qtcommercial", "cache_path", cache_path)
+                        # Add comment before the cache_path entry
+                        with open(self.configfile, "r") as f:
+                            lines = f.readlines()
+                        with open(self.configfile, "w") as f:
+                            for line in lines:
+                                f.write(line)
+
     def _get_config(self) -> ConfigParser:
         """Safe getter for config that ensures it's initialized."""
         self._initialize()
@@ -387,13 +404,8 @@ class SettingsClass:
             with open(self.configfile, "r") as f:
                 self.config.read_file(f)
 
-        # Add cache_path if not present
-        if not self.config.has_option("qtcommercial", "cache_path"):
-            from aqt.commercial import CommercialInstaller
-
-            if not self.config.has_section("qtcommercial"):
-                self.config.add_section("qtcommercial")
-            self.config.set("qtcommercial", "cache_path", str(CommercialInstaller._get_qt_local_folder_path() / "cache"))
+        if self.config.get("qtcommercial", "cache_path").strip() == "":
+            self.config.set("qtcommercial", "cache_path", str(get_cache_dir_root()))
 
     @property
     def qt_installer_cache_path(self) -> str:
@@ -551,3 +563,58 @@ def setup_logging(env_key="LOG_CFG"):
     if config is not None and os.path.exists(config):
         Settings.loggingconf = config
     logging.config.fileConfig(Settings.loggingconf)
+
+
+def get_os_name() -> str:
+    system = sys.platform
+    if system == "Darwin":
+        return "mac"
+    if system == "Linux":
+        return "linux"
+    if system == "Windows":
+        return "windows"
+    raise ValueError(f"Unsupported operating system: {system}")
+
+
+def get_qt_local_folder_path() -> Path:
+    os_name = get_os_name()
+    if os_name == "windows":
+        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+        return Path(appdata) / "Qt"
+    if os_name == "mac":
+        return Path.home() / "Library" / "Application Support" / "Qt"
+    return Path.home() / ".local" / "share" / "Qt"
+
+
+def get_qt_account_path() -> Path:
+    return get_qt_local_folder_path() / "qtaccount.ini"
+
+
+def get_qt_installer_name() -> str:
+    installer_dict = {
+        "windows": "qt-unified-windows-x64-online.exe",
+        "mac": "qt-unified-macOS-x64-online.dmg",
+        "linux": "qt-unified-linux-x64-online.run",
+    }
+    return installer_dict[get_os_name()]
+
+
+def get_qt_installer_path() -> Path:
+    return get_qt_local_folder_path() / get_qt_installer_name()
+
+
+def get_default_local_cache_path() -> Path:
+    os_name = get_os_name()
+    if os_name == "windows":
+        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+        return Path(appdata) / "aqt" / "cache"
+    if os_name == "mac":
+        return Path.home() / "Library" / "Application Support" / "aqt" / "cache"
+    return Path.home() / ".local" / "share" / "aqt" / "cache"
+
+
+def get_cache_dir_root() -> Path:
+    """Create and return cache directory path."""
+    base_cache = Path.home() / ".cache" / "aqt"
+    base_cache.mkdir(parents=True, exist_ok=True)
+    return base_cache

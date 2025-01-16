@@ -1,6 +1,5 @@
 import json
 import os
-import platform
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -23,17 +22,17 @@ class QtPackageInfo:
 
 
 class QtPackageManager:
-    def __init__(self, arch: str, version: Version, target: str, temp_dir: str):
+    def __init__(self, arch: str, version: Version, target: str):
         self.arch = arch
         self.version = version
         self.target = target
-        self.temp_dir = temp_dir
+        self.temp_dir = Settings._get_cache_dir_root() / "tmp"
         self.cache_dir = self._get_cache_dir()
         self.packages: List[QtPackageInfo] = []
 
     def _get_cache_dir(self) -> Path:
         """Create and return cache directory path."""
-        base_cache = Path.home() / ".cache" / "aqt"
+        base_cache = Settings._get_cache_dir_root()
         cache_path = base_cache / self.target / self.arch / str(self.version)
         cache_path.mkdir(parents=True, exist_ok=True)
         return cache_path
@@ -129,56 +128,39 @@ class QtPackageManager:
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to gather packages: {e}")
 
-    def get_install_command(self, modules: Optional[List[str]], install_path: str) -> List[str]:
+    def get_install_command(self, modules: Optional[List[str]]) -> List[str]:
         """Generate installation command based on requested modules."""
-        # If 'all' is in modules, use the -full package
-        if modules and "all" in modules:
-            package_name = f"{self._get_base_package_name()}.{self.arch}-full"
+        package_name = f"{self._get_base_package_name()}.{self.arch}"
+        cmd = ["install", package_name]
+
+        # No modules requested, return base package only
+        if not modules:
+            return cmd
+
+        # Ensure package cache exists
+        self.gather_packages(self.temp_dir)
+
+        # Get available addon packages
+        addon_packages = [pkg for pkg in self.packages if f"{self._get_base_package_name()}.addons." in pkg.name]
+
+        # Process modules based on whether 'all' was requested
+        if "all" in modules:
+            # Add all available addon modules
+            for pkg in addon_packages:
+                module_name = pkg.name.split(".")[-1]
+                cmd.append(f"{package_name}.addons.{module_name}")
         else:
-            # Base package name
-            package_name = f"{self._get_base_package_name()}.{self.arch}"
-
-        cmd = [
-            "install",
-            package_name,
-        ]
-
-        # Add individual modules if specified and not using 'all'
-        if modules and "all" not in modules:
+            # Add only specifically requested modules that exist
             for module in modules:
-                module_pkg = f"{self._get_base_package_name()}.addons.{module}"
-                if any(p.name == module_pkg for p in self.packages):
-                    cmd.append(module_pkg)
+                addon_name = f"{self._get_base_package_name()}.addons.{module}"
+                if any(pkg.name == addon_name for pkg in self.packages):
+                    cmd.append(f"{package_name}.addons.{module}")
 
         return cmd
 
 
 class CommercialInstaller:
     """Qt Commercial installer that handles module installation and package management."""
-
-    ALLOWED_INSTALLERS = {
-        "windows": "qt-unified-windows-x64-online.exe",
-        "mac": "qt-unified-macOS-x64-online.dmg",
-        "linux": "qt-unified-linux-x64-online.run",
-    }
-
-    ALLOWED_AUTO_ANSWER_OPTIONS = {
-        "OperationDoesNotExistError": frozenset({"Abort", "Ignore"}),
-        "OverwriteTargetDirectory": frozenset({"Yes", "No"}),
-        "stopProcessesForUpdates": frozenset({"Retry", "Ignore", "Cancel"}),
-        "installationErrorWithCancel": frozenset({"Retry", "Ignore", "Cancel"}),
-        "installationErrorWithIgnore": frozenset({"Retry", "Ignore"}),
-        "AssociateCommonFiletypes": frozenset({"Yes", "No"}),
-        "telemetry-question": frozenset({"Yes", "No"}),
-    }
-
-    UNATTENDED_FLAGS = frozenset(
-        [
-            "--accept-licenses",
-            "--accept-obligations",
-            "--confirm-command",
-        ]
-    )
 
     def __init__(
         self,
@@ -210,7 +192,7 @@ class CommercialInstaller:
         self.os_name = CommercialInstaller._get_os_name()
         self._installer_filename = CommercialInstaller._get_qt_installer_name()
         self.qt_account = CommercialInstaller._get_qt_account_path()
-        self.package_manager = QtPackageManager(self.arch, self.version, self.target, Settings.qt_installer_cache_path)
+        self.package_manager = QtPackageManager(self.arch, self.version, self.target)
 
     @staticmethod
     def get_auto_answers() -> str:
@@ -227,8 +209,7 @@ class CommercialInstaller:
 
         answers = []
         for key, value in settings_map.items():
-            if value in CommercialInstaller.ALLOWED_AUTO_ANSWER_OPTIONS[key]:
-                answers.append(f"{key}={value}")
+            answers.append(f"{key}={value}")
 
         return ",".join(answers)
 
@@ -246,7 +227,7 @@ class CommercialInstaller:
 
         # Add unattended flags unless explicitly disabled
         if not no_unattended:
-            cmd.extend(CommercialInstaller.UNATTENDED_FLAGS)
+            cmd.extend(["--accept-licenses", "--accept-obligations", "--confirm-command"])
 
         if override:
             # When using override, still include unattended flags unless disabled
@@ -305,9 +286,12 @@ class CommercialInstaller:
                         no_unattended=self.no_unattended,
                     )
 
-                    cmd = base_cmd + self.package_manager.get_install_command(self.modules, self.output_dir or os.getcwd())
+                    cmd = [
+                        *base_cmd,
+                        *self.package_manager.get_install_command(self.modules),
+                    ]
 
-                self.logger.info(f"Running: {' '.join(cmd)}")
+                self.logger.info(f"Running: {cmd}")
 
                 subprocess.run(cmd, shell=False, check=True, cwd=temp_dir, timeout=Settings.qt_installer_timeout)
             except subprocess.TimeoutExpired:
@@ -318,54 +302,6 @@ class CommercialInstaller:
                 raise
             finally:
                 self.logger.info("Qt installation completed successfully")
-
-    @staticmethod
-    def _get_os_name() -> str:
-        system = platform.system()
-        if system == "Darwin":
-            return "mac"
-        if system == "Linux":
-            return "linux"
-        if system == "Windows":
-            return "windows"
-        raise ValueError(f"Unsupported operating system: {system}")
-
-    @staticmethod
-    def _get_qt_local_folder_path() -> Path:
-        os_name = CommercialInstaller._get_os_name()
-        if os_name == "windows":
-            appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-            return Path(appdata) / "Qt"
-        if os_name == "mac":
-            return Path.home() / "Library" / "Application Support" / "Qt"
-        return Path.home() / ".local" / "share" / "Qt"
-
-    @staticmethod
-    def _get_default_local_cache_path() -> Path:
-        os_name = CommercialInstaller._get_os_name()
-        if os_name == "windows":
-            appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-            return Path(appdata) / "aqt"
-        if os_name == "mac":
-            return Path.home() / "Library" / "Application Support" / "aqt"
-        return Path.home() / ".local" / "share" / "aqt"
-
-    @staticmethod
-    def _get_qt_account_path() -> Path:
-        return CommercialInstaller._get_qt_local_folder_path() / "qtaccount.ini"
-
-    @staticmethod
-    def _get_qt_installer_name() -> str:
-        installer_dict = {
-            "windows": "qt-unified-windows-x64-online.exe",
-            "mac": "qt-unified-macOS-x64-online.dmg",
-            "linux": "qt-unified-linux-x64-online.run",
-        }
-        return installer_dict[CommercialInstaller._get_os_name()]
-
-    @staticmethod
-    def _get_qt_installer_path() -> Path:
-        return CommercialInstaller._get_qt_local_folder_path() / CommercialInstaller._get_qt_installer_name()
 
     def download_installer(self, target_path: Path, timeout: int) -> None:
         url = f"{self.base_url}/official_releases/online_installers/{self._installer_filename}"
