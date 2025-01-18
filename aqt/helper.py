@@ -48,6 +48,64 @@ from aqt.exceptions import (
 )
 
 
+def get_os_name() -> str:
+    system = sys.platform.lower()
+    if system == "darwin":
+        return "mac"
+    if system == "linux":
+        return "linux"
+    if system == "windows":
+        return "windows"
+    raise ValueError(f"Unsupported operating system: {system}")
+
+
+def get_qt_local_folder_path() -> Path:
+    os_name = get_os_name()
+    if os_name == "windows":
+        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+        return Path(appdata) / "Qt"
+    if os_name == "mac":
+        return Path.home() / "Library" / "Application Support" / "Qt"
+    return Path.home() / ".local" / "share" / "Qt"
+
+
+def get_qt_account_path() -> Path:
+    return get_qt_local_folder_path() / "qtaccount.ini"
+
+
+def get_qt_installer_name() -> str:
+    installer_dict = {
+        "windows": "qt-unified-windows-x64-online.exe",
+        "mac": "qt-unified-macOS-x64-online.dmg",
+        "linux": "qt-unified-linux-x64-online.run",
+    }
+    return installer_dict[get_os_name()]
+
+
+def get_qt_installer_path() -> Path:
+    return get_qt_local_folder_path() / get_qt_installer_name()
+
+
+def get_default_local_cache_path() -> Path:
+    os_name = get_os_name()
+    if os_name == "windows":
+        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+        return Path(appdata) / "aqt" / "cache"
+    if os_name == "mac":
+        return Path.home() / "Library" / "Application Support" / "aqt" / "cache"
+    return Path.home() / ".local" / "share" / "aqt" / "cache"
+
+
+def get_default_local_tmp_path() -> Path:
+    os_name = get_os_name()
+    if os_name == "windows":
+        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
+        return Path(appdata) / "aqt" / "tmp"
+    if os_name == "mac":
+        return Path.home() / "Library" / "Application Support" / "aqt" / "tmp"
+    return Path.home() / ".local" / "share" / "aqt" / "tmp"
+
+
 def _get_meta(url: str) -> requests.Response:
     return requests.get(url + ".meta4")
 
@@ -362,33 +420,26 @@ class SettingsClass:
                     self.config = MyConfigParser()
                     self.configfile = os.path.join(os.path.dirname(__file__), "settings.ini")
                     self.loggingconf = os.path.join(os.path.dirname(__file__), "logging.ini")
-
                     self.config.read(self.configfile)
-                    if not self.config.has_section("qtcommercial"):
-                        self.config.add_section("qtcommercial")
 
-                    # Add cache_path with OS-specific default if not present
-                    if not self.config.has_option("qtcommercial", "cache_path"):
+                    if not Path(self.qt_installer_cache_path).exists():
+                        Path(self.qt_installer_cache_path).mkdir(parents=True, exist_ok=True)
+                    if not Path(self.qt_installer_tmp_path).exists():
+                        Path(self.qt_installer_tmp_path).mkdir(parents=True, exist_ok=True)
 
-                        cache_dir = get_default_local_cache_path()
-                        cache_path = str(cache_dir)
-                        self.config.set("qtcommercial", "cache_path", cache_path)
-                        # Add comment before the cache_path entry
-                        with open(self.configfile, "r") as f:
-                            lines = f.readlines()
-                        with open(self.configfile, "w") as f:
-                            for line in lines:
-                                f.write(line)
+                    logging.info(f"Cache folder: {self.qt_installer_cache_path}")
+                    logging.info(f"Temp folder: {self.qt_installer_tmp_path}")
 
     def _get_config(self) -> ConfigParser:
         """Safe getter for config that ensures it's initialized."""
         self._initialize()
-        assert self.config is not None  # This helps mypy understand config won't be None
+        assert self.config is not None
         return self.config
 
     def load_settings(self, file: Optional[Union[str, TextIO]] = None) -> None:
         if self.config is None:
             return
+
         if file is not None:
             if isinstance(file, str):
                 result = self.config.read(file)
@@ -404,13 +455,28 @@ class SettingsClass:
             with open(self.configfile, "r") as f:
                 self.config.read_file(f)
 
-        if self.config.get("qtcommercial", "cache_path").strip() == "":
-            self.config.set("qtcommercial", "cache_path", str(get_cache_dir_root()))
+    def _get_config(self) -> ConfigParser:
+        """Safe getter for config that ensures it's initialized."""
+        self._initialize()
+        assert self.config is not None  # This helps mypy understand config won't be None
+        return self.config
 
     @property
     def qt_installer_cache_path(self) -> str:
         """Path for Qt installer cache."""
-        return self._get_config().get("qtcommercial", "cache_path")
+        config = self._get_config()
+        # If no cache_path or blank, return default without modifying config
+        if not config.has_option("qtcommercial", "cache_path") or config.get("qtcommercial", "cache_path").strip() == "":
+            return str(get_default_local_cache_path())
+        return config.get("qtcommercial", "cache_path")
+
+    @property
+    def qt_installer_tmp_path(self) -> str:
+        """Path for Qt installer tmp."""
+        config = self._get_config()
+        if not config.has_option("qtcommercial", "tmp_path") or config.get("qtcommercial", "tmp_path").strip() == "":
+            return str(get_default_local_cache_path())
+        return config.get("qtcommercial", "tmp_path")
 
     @property
     def archive_download_location(self):
@@ -563,58 +629,3 @@ def setup_logging(env_key="LOG_CFG"):
     if config is not None and os.path.exists(config):
         Settings.loggingconf = config
     logging.config.fileConfig(Settings.loggingconf)
-
-
-def get_os_name() -> str:
-    system = sys.platform
-    if system == "Darwin":
-        return "mac"
-    if system == "Linux":
-        return "linux"
-    if system == "Windows":
-        return "windows"
-    raise ValueError(f"Unsupported operating system: {system}")
-
-
-def get_qt_local_folder_path() -> Path:
-    os_name = get_os_name()
-    if os_name == "windows":
-        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-        return Path(appdata) / "Qt"
-    if os_name == "mac":
-        return Path.home() / "Library" / "Application Support" / "Qt"
-    return Path.home() / ".local" / "share" / "Qt"
-
-
-def get_qt_account_path() -> Path:
-    return get_qt_local_folder_path() / "qtaccount.ini"
-
-
-def get_qt_installer_name() -> str:
-    installer_dict = {
-        "windows": "qt-unified-windows-x64-online.exe",
-        "mac": "qt-unified-macOS-x64-online.dmg",
-        "linux": "qt-unified-linux-x64-online.run",
-    }
-    return installer_dict[get_os_name()]
-
-
-def get_qt_installer_path() -> Path:
-    return get_qt_local_folder_path() / get_qt_installer_name()
-
-
-def get_default_local_cache_path() -> Path:
-    os_name = get_os_name()
-    if os_name == "windows":
-        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-        return Path(appdata) / "aqt" / "cache"
-    if os_name == "mac":
-        return Path.home() / "Library" / "Application Support" / "aqt" / "cache"
-    return Path.home() / ".local" / "share" / "aqt" / "cache"
-
-
-def get_cache_dir_root() -> Path:
-    """Create and return cache directory path."""
-    base_cache = Path.home() / ".cache" / "aqt"
-    base_cache.mkdir(parents=True, exist_ok=True)
-    return base_cache

@@ -841,7 +841,7 @@ class Cli:
         )
         install_qt_commercial_parser.add_argument(
             "--modules",
-            nargs="?",
+            nargs="*",
             help="Add modules",
         )
         self._set_common_options(install_qt_commercial_parser)

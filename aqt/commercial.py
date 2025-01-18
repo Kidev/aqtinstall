@@ -10,7 +10,7 @@ from typing import List, Optional
 import requests
 from defusedxml import ElementTree
 
-from aqt.helper import Settings
+from aqt.helper import get_os_name, get_qt_account_path, get_qt_installer_name, Settings
 from aqt.metadata import Version
 
 
@@ -26,16 +26,16 @@ class QtPackageManager:
         self.arch = arch
         self.version = version
         self.target = target
-        self.temp_dir = Settings._get_cache_dir_root() / "tmp"
+        self.temp_dir = Settings.qt_installer_tmp_path
         self.cache_dir = self._get_cache_dir()
         self.packages: List[QtPackageInfo] = []
 
     def _get_cache_dir(self) -> Path:
         """Create and return cache directory path."""
-        base_cache = Settings._get_cache_dir_root()
-        cache_path = base_cache / self.target / self.arch / str(self.version)
-        cache_path.mkdir(parents=True, exist_ok=True)
-        return cache_path
+        base_cache = Settings.qt_installer_cache_path
+        cache_path = os.path.join(base_cache, self.target, self.arch, str(self.version))
+        Path(cache_path).mkdir(parents=True, exist_ok=True)
+        return Path(cache_path)
 
     def _get_cache_file(self) -> Path:
         """Get the cache file path."""
@@ -140,21 +140,28 @@ class QtPackageManager:
         # Ensure package cache exists
         self.gather_packages(self.temp_dir)
 
-        # Get available addon packages
-        addon_packages = [pkg for pkg in self.packages if f"{self._get_base_package_name()}.addons." in pkg.name]
-
-        # Process modules based on whether 'all' was requested
         if "all" in modules:
-            # Add all available addon modules
-            for pkg in addon_packages:
-                module_name = pkg.name.split(".")[-1]
-                cmd.append(f"{package_name}.addons.{module_name}")
+            # Find all addon and direct module packages
+            for pkg in self.packages:
+                if f"{self._get_base_package_name()}.addons." in pkg.name or pkg.name.startswith(
+                    f"{self._get_base_package_name()}."
+                ):
+                    module_name = pkg.name.split(".")[-1]
+                    if module_name != self.arch:  # Skip the base package
+                        cmd.append(pkg.name)
         else:
-            # Add only specifically requested modules that exist
+            # Add specifically requested modules that exist in either format
             for module in modules:
                 addon_name = f"{self._get_base_package_name()}.addons.{module}"
-                if any(pkg.name == addon_name for pkg in self.packages):
-                    cmd.append(f"{package_name}.addons.{module}")
+                direct_name = f"{self._get_base_package_name()}.{module}"
+
+                # Check if either package name exists
+                matching_pkg = next(
+                    (pkg.name for pkg in self.packages if pkg.name == addon_name or pkg.name == direct_name), None
+                )
+
+                if matching_pkg:
+                    cmd.append(matching_pkg)
 
         return cmd
 
@@ -189,9 +196,9 @@ class CommercialInstaller:
         self.no_unattended = no_unattended
 
         # Set OS-specific properties
-        self.os_name = CommercialInstaller._get_os_name()
-        self._installer_filename = CommercialInstaller._get_qt_installer_name()
-        self.qt_account = CommercialInstaller._get_qt_account_path()
+        self.os_name = get_os_name()
+        self._installer_filename = get_qt_installer_name()
+        self.qt_account = get_qt_account_path()
         self.package_manager = QtPackageManager(self.arch, self.version, self.target)
 
     @staticmethod
