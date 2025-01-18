@@ -3,14 +3,14 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from logging import getLogger, Logger
+from logging import Logger, getLogger
 from pathlib import Path
 from typing import List, Optional
 
 import requests
 from defusedxml import ElementTree
 
-from aqt.helper import get_os_name, get_qt_account_path, get_qt_installer_name, Settings
+from aqt.helper import Settings, get_os_name, get_qt_account_path, get_qt_installer_name
 from aqt.metadata import Version
 
 

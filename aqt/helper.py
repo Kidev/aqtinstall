@@ -26,7 +26,7 @@ import posixpath
 import secrets
 import sys
 from configparser import ConfigParser
-from logging import getLogger, Handler
+from logging import Handler, getLogger
 from logging.handlers import QueueListener
 from pathlib import Path
 from threading import Lock
