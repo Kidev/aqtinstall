@@ -26,7 +26,6 @@ class QtPackageManager:
         self.arch = arch
         self.version = version
         self.target = target
-        self.temp_dir = Settings.qt_installer_tmp_path
         self.cache_dir = self._get_cache_dir()
         self.packages: List[QtPackageInfo] = []
 
@@ -128,7 +127,7 @@ class QtPackageManager:
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to gather packages: {e}")
 
-    def get_install_command(self, modules: Optional[List[str]]) -> List[str]:
+    def get_install_command(self, modules: Optional[List[str]], temp_dir: str) -> List[str]:
         """Generate installation command based on requested modules."""
         package_name = f"{self._get_base_package_name()}.{self.arch}"
         cmd = ["install", package_name]
@@ -138,7 +137,7 @@ class QtPackageManager:
             return cmd
 
         # Ensure package cache exists
-        self.gather_packages(self.temp_dir)
+        self.gather_packages(temp_dir)
 
         if "all" in modules:
             # Find all addon and direct module packages
@@ -315,7 +314,7 @@ class CommercialInstaller:
 
                     cmd = [
                         *base_cmd,
-                        *self.package_manager.get_install_command(self.modules),
+                        *self.package_manager.get_install_command(self.modules, temp_dir),
                     ]
 
                 self.logger.info(f"Running: {cmd}")

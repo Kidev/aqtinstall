@@ -423,7 +423,6 @@ class SettingsClass:
                     self.config.read(self.configfile)
 
                     logging.info(f"Cache folder: {self.qt_installer_cache_path}")
-                    logging.info(f"Temp folder: {self.qt_installer_tmp_path}")
 
     def _get_config(self) -> ConfigParser:
         """Safe getter for config that ensures it's initialized."""
@@ -464,14 +463,6 @@ class SettingsClass:
         if not config.has_option("qtcommercial", "cache_path") or config.get("qtcommercial", "cache_path").strip() == "":
             return str(get_default_local_cache_path())
         return config.get("qtcommercial", "cache_path")
-
-    @property
-    def qt_installer_tmp_path(self) -> str:
-        """Path for Qt installer tmp."""
-        config = self._get_config()
-        if not config.has_option("qtcommercial", "tmp_path") or config.get("qtcommercial", "tmp_path").strip() == "":
-            return str(get_default_local_cache_path())
-        return config.get("qtcommercial", "tmp_path")
 
     @property
     def archive_download_location(self):
