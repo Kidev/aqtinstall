@@ -1,6 +1,5 @@
 import json
 import os
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from logging import Logger, getLogger
@@ -11,7 +10,7 @@ import requests
 from defusedxml import ElementTree
 
 from aqt.exceptions import DiskAccessNotPermitted
-from aqt.helper import Settings, get_os_name, get_qt_account_path, get_qt_installer_name
+from aqt.helper import Settings, get_os_name, get_qt_account_path, get_qt_installer_name, run_static_subprocess_dynamically
 from aqt.metadata import Version
 
 
@@ -320,12 +319,11 @@ class CommercialInstaller:
 
                 self.logger.info(f"Running: {cmd}")
 
-                subprocess.run(cmd, shell=False, check=True, cwd=temp_dir, timeout=Settings.qt_installer_timeout)
-            except subprocess.TimeoutExpired:
-                self.logger.error(f"Installation timed out after {Settings.qt_installer_timeout} seconds")
-                raise
-            except subprocess.CalledProcessError as e:
-                self.logger.error(f"Installation failed with exit code {e.returncode}")
+                run_static_subprocess_dynamically(
+                    cmd=cmd, shell=False, check=True, cwd=temp_dir, timeout=Settings.qt_installer_timeout
+                )
+            except Exception as e:
+                self.logger.error(f"Installation failed with exit code {e.__str__()}")
                 raise
             finally:
                 self.logger.info("Qt installation completed successfully")

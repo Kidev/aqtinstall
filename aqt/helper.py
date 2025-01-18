@@ -29,6 +29,7 @@ from configparser import ConfigParser
 from logging import Handler, getLogger
 from logging.handlers import QueueListener
 from pathlib import Path
+from runpy import run_path
 from threading import Lock
 from typing import Any, Callable, Dict, Generator, List, Optional, TextIO, Tuple, Union
 from urllib.parse import urlparse
@@ -615,3 +616,27 @@ def setup_logging(env_key="LOG_CFG"):
     if config is not None and os.path.exists(config):
         Settings.loggingconf = config
     logging.config.fileConfig(Settings.loggingconf)
+
+
+# This is evil
+def run_static_subprocess_dynamically(cmd: list[str] | str, shell: bool, check: bool, cwd: str, timeout: int) -> None:
+    """
+    Writes a hardcoded subprocess.run command into a temporary file and executes it.
+    """
+
+    try:
+        with open("__subprocess_runner.py", "w") as temp_file:
+            temp_file.write(
+                "import subprocess\n"
+                'if __name__ == "__main__":\n'
+                f"    subprocess.run(args={cmd}, shell={shell}, check={check}, cwd='{cwd}', timeout={timeout})\n"
+            )
+
+        run_path("__subprocess_runner.py")
+
+    except FileNotFoundError as e:
+        print(f"Runner unable to be created or read: {e}")
+
+    finally:
+        if os.path.exists("__subprocess_runner.py"):
+            os.remove("__subprocess_runner.py")
