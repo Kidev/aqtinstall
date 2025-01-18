@@ -267,6 +267,26 @@ class CommercialInstaller:
                 "No Qt account credentials found. Provide username and password or ensure qtaccount.ini exists."
             )
 
+        # Check output directory if specified
+        if self.output_dir:
+            output_path = Path(self.output_dir) / str(self.version)
+            if output_path.exists():
+                if Settings.qt_installer_overwritetargetdirectory.lower() == "yes":
+                    self.logger.warning(f"Target directory {output_path} exists - removing as overwrite is enabled")
+                    try:
+                        import shutil
+
+                        shutil.rmtree(output_path)
+                    except (OSError, PermissionError) as e:
+                        raise RuntimeError(f"Failed to remove existing target directory {output_path}: {str(e)}")
+                else:
+                    msg = (
+                        f"Target directory {output_path} already exists. "
+                        "Set qt_installer_overwritetargetdirectory='Yes' in settings.ini to overwrite."
+                    )
+                    raise RuntimeError(msg)
+
+        # Setup cache directory
         cache_path = Path(Settings.qt_installer_cache_path)
         cache_path.mkdir(parents=True, exist_ok=True)
 

@@ -422,11 +422,6 @@ class SettingsClass:
                     self.loggingconf = os.path.join(os.path.dirname(__file__), "logging.ini")
                     self.config.read(self.configfile)
 
-                    if not Path(self.qt_installer_cache_path).exists():
-                        Path(self.qt_installer_cache_path).mkdir(parents=True, exist_ok=True)
-                    if not Path(self.qt_installer_tmp_path).exists():
-                        Path(self.qt_installer_tmp_path).mkdir(parents=True, exist_ok=True)
-
                     logging.info(f"Cache folder: {self.qt_installer_cache_path}")
                     logging.info(f"Temp folder: {self.qt_installer_tmp_path}")
 
