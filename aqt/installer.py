@@ -38,7 +38,7 @@ from logging import getLogger
 from logging.handlers import QueueHandler
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast, List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 import aqt
 from aqt.archives import QtArchives, QtPackage, SrcDocExamplesArchives, ToolArchives
@@ -56,16 +56,16 @@ from aqt.exceptions import (
     OutOfMemory,
 )
 from aqt.helper import (
+    MyQueueListener,
+    Settings,
     downloadBinaryFile,
     get_hash,
-    MyQueueListener,
     retry_on_bad_connection,
     retry_on_errors,
-    Settings,
     setup_logging,
 )
-from aqt.metadata import ArchiveId, MetadataFactory, QtRepoProperty, show_list, SimpleSpec, suggested_follow_up, Version
-from aqt.updater import dir_for_version, Updater
+from aqt.metadata import ArchiveId, MetadataFactory, QtRepoProperty, SimpleSpec, Version, show_list, suggested_follow_up
+from aqt.updater import Updater, dir_for_version
 
 try:
     import py7zr
