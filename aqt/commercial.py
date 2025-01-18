@@ -3,14 +3,15 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from logging import Logger, getLogger
+from logging import getLogger, Logger
 from pathlib import Path
 from typing import List, Optional
 
 import requests
 from defusedxml import ElementTree
 
-from aqt.helper import Settings, get_os_name, get_qt_account_path, get_qt_installer_name
+from aqt.exceptions import DiskAccessNotPermitted
+from aqt.helper import get_os_name, get_qt_account_path, get_qt_installer_name, Settings
 from aqt.metadata import Version
 
 
@@ -277,13 +278,13 @@ class CommercialInstaller:
 
                         shutil.rmtree(output_path)
                     except (OSError, PermissionError) as e:
-                        raise RuntimeError(f"Failed to remove existing target directory {output_path}: {str(e)}")
+                        raise DiskAccessNotPermitted(f"Failed to remove existing target directory {output_path}: {str(e)}")
                 else:
                     msg = (
                         f"Target directory {output_path} already exists. "
-                        "Set qt_installer_overwritetargetdirectory='Yes' in settings.ini to overwrite."
+                        "Set overwrite_target_directory='Yes' in settings.ini to overwrite, or select another directory."
                     )
-                    raise RuntimeError(msg)
+                    raise DiskAccessNotPermitted(msg)
 
         # Setup cache directory
         cache_path = Path(Settings.qt_installer_cache_path)

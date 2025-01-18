@@ -38,7 +38,7 @@ from logging import getLogger
 from logging.handlers import QueueHandler
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import List, Optional, Tuple, cast
+from typing import cast, List, Optional, Tuple
 
 import aqt
 from aqt.archives import QtArchives, QtPackage, SrcDocExamplesArchives, ToolArchives
@@ -56,16 +56,16 @@ from aqt.exceptions import (
     OutOfMemory,
 )
 from aqt.helper import (
-    MyQueueListener,
-    Settings,
     downloadBinaryFile,
     get_hash,
+    MyQueueListener,
     retry_on_bad_connection,
     retry_on_errors,
+    Settings,
     setup_logging,
 )
-from aqt.metadata import ArchiveId, MetadataFactory, QtRepoProperty, SimpleSpec, Version, show_list, suggested_follow_up
-from aqt.updater import Updater, dir_for_version
+from aqt.metadata import ArchiveId, MetadataFactory, QtRepoProperty, show_list, SimpleSpec, suggested_follow_up, Version
+from aqt.updater import dir_for_version, Updater
 
 try:
     import py7zr
@@ -674,7 +674,6 @@ class Cli:
         self.show_aqt_version()
 
         if args.override:
-            # When override is used, we only need minimal parameters
             commercial_installer = CommercialInstaller(
                 target="",  # Empty string as placeholder
                 arch="",
@@ -685,7 +684,6 @@ class Cli:
                 no_unattended=not Settings.qt_installer_unattended,
             )
         else:
-            # Original validation and installer creation
             if not all([args.target, args.arch, args.version]):
                 raise CliInputError("target, arch, and version are required")
 
@@ -704,6 +702,9 @@ class Cli:
 
         try:
             commercial_installer.install()
+        except DiskAccessNotPermitted:
+            # Let DiskAccessNotPermitted propagate up without additional logging
+            raise
         except Exception as e:
             self.logger.error(f"Commercial installation failed: {str(e)}")
             raise
