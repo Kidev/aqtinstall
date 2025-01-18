@@ -97,7 +97,7 @@ def get_default_local_cache_path() -> Path:
     return Path.home() / ".local" / "share" / "aqt" / "cache"
 
 
-def get_default_local_tmp_path() -> Path:
+def get_default_local_temp_path() -> Path:
     os_name = get_os_name()
     if os_name == "windows":
         appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
@@ -464,6 +464,15 @@ class SettingsClass:
         if not config.has_option("qtcommercial", "cache_path") or config.get("qtcommercial", "cache_path").strip() == "":
             return str(get_default_local_cache_path())
         return config.get("qtcommercial", "cache_path")
+
+    @property
+    def qt_installer_temp_path(self) -> str:
+        """Path for Qt installer cache."""
+        config = self._get_config()
+        # If no cache_path or blank, return default without modifying config
+        if not config.has_option("qtcommercial", "temp_path") or config.get("qtcommercial", "temp_path").strip() == "":
+            return str(get_default_local_temp_path())
+        return config.get("qtcommercial", "temp_path")
 
     @property
     def archive_download_location(self):

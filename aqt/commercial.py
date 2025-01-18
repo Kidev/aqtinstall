@@ -1,6 +1,5 @@
 import json
 import os
-import tempfile
 from dataclasses import dataclass
 from logging import Logger, getLogger
 from pathlib import Path
@@ -10,7 +9,7 @@ import requests
 from defusedxml import ElementTree
 
 from aqt.exceptions import DiskAccessNotPermitted
-from aqt.helper import Settings, get_os_name, get_qt_account_path, get_qt_installer_name, run_static_subprocess_dynamically
+from aqt.helper import Settings, get_os_name, get_qt_account_path, get_qt_installer_name
 from aqt.metadata import Version
 
 
@@ -109,8 +108,10 @@ class QtPackageManager:
             "search",
             base_package,
         ]
+        import subprocess
 
         try:
+
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
             # Extract the XML portion from the output
@@ -289,44 +290,49 @@ class CommercialInstaller:
         cache_path = Path(Settings.qt_installer_cache_path)
         cache_path.mkdir(parents=True, exist_ok=True)
 
-        with tempfile.TemporaryDirectory(prefix="qt_install_") as temp_dir:
-            temp_path = Path(temp_dir)
-            installer_path = temp_path / self._installer_filename
+        import shutil
 
-            self.logger.info(f"Downloading Qt installer to {installer_path}")
-            self.download_installer(installer_path, Settings.qt_installer_timeout)
+        temp_dir = Settings.qt_installer_temp_path
+        temp_path = Path(temp_dir)
+        if temp_path.exists():
+            shutil.rmtree(temp_dir)
+        temp_path.mkdir(parents=True, exist_ok=True)
+        installer_path = temp_path / self._installer_filename
 
-            try:
-                cmd = []
-                if self.override:
-                    cmd = self.build_command(str(installer_path), override=self.override, no_unattended=self.no_unattended)
-                else:
-                    # Initialize package manager and gather packages
-                    self.package_manager.gather_packages(str(installer_path))
+        self.logger.info(f"Downloading Qt installer to {installer_path}")
+        self.download_installer(installer_path, Settings.qt_installer_timeout)
 
-                    base_cmd = self.build_command(
-                        str(installer_path),
-                        username=self.username,
-                        password=self.password,
-                        output_dir=self.output_dir,
-                        no_unattended=self.no_unattended,
-                    )
+        try:
+            cmd = []
+            if self.override:
+                cmd = self.build_command(str(installer_path), override=self.override, no_unattended=self.no_unattended)
+            else:
+                # Initialize package manager and gather packages
+                self.package_manager.gather_packages(str(installer_path))
 
-                    cmd = [
-                        *base_cmd,
-                        *self.package_manager.get_install_command(self.modules, temp_dir),
-                    ]
-
-                self.logger.info(f"Running: {cmd}")
-
-                run_static_subprocess_dynamically(
-                    cmd=cmd, shell=False, check=True, cwd=temp_dir, timeout=Settings.qt_installer_timeout
+                base_cmd = self.build_command(
+                    str(installer_path.absolute()),
+                    username=self.username,
+                    password=self.password,
+                    output_dir=self.output_dir,
+                    no_unattended=self.no_unattended,
                 )
-            except Exception as e:
-                self.logger.error(f"Installation failed with exit code {e.__str__()}")
-                raise
-            finally:
-                self.logger.info("Qt installation completed successfully")
+
+                cmd = [
+                    *base_cmd,
+                    *self.package_manager.get_install_command(self.modules, temp_dir),
+                ]
+
+            self.logger.info(f"Running: {cmd}")
+
+            import subprocess
+
+            subprocess.run(cmd, shell=False, check=True, cwd=temp_dir, timeout=Settings.qt_installer_timeout)
+        except Exception as e:
+            self.logger.error(f"Installation failed with exit code {e.__str__()}")
+            raise
+        finally:
+            self.logger.info("Qt installation completed successfully")
 
     def download_installer(self, target_path: Path, timeout: int) -> None:
         url = f"{self.base_url}/official_releases/online_installers/{self._installer_filename}"
