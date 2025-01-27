@@ -1,7 +1,7 @@
 import json
 import os
 from dataclasses import dataclass
-from logging import Logger, getLogger
+from logging import getLogger, Logger
 from pathlib import Path
 from typing import List, Optional
 
@@ -9,7 +9,7 @@ import requests
 from defusedxml import ElementTree
 
 from aqt.exceptions import DiskAccessNotPermitted
-from aqt.helper import Settings, get_os_name, get_qt_account_path, get_qt_installer_name, safely_run, safely_run_save_output
+from aqt.helper import get_os_name, get_qt_account_path, get_qt_installer_name, safely_run, safely_run_save_output, Settings
 from aqt.metadata import Version
 
 
@@ -21,12 +21,14 @@ class QtPackageInfo:
 
 
 class QtPackageManager:
-    def __init__(self, arch: str, version: Version, target: str):
+    def __init__(self, arch: str, version: Version, target: str, username: str = None, password: str = None):
         self.arch = arch
         self.version = version
         self.target = target
         self.cache_dir = self._get_cache_dir()
         self.packages: List[QtPackageInfo] = []
+        self.username = username
+        self.password = password
 
     def _get_cache_dir(self) -> Path:
         """Create and return cache directory path."""
@@ -109,6 +111,9 @@ class QtPackageManager:
             base_package,
         ]
 
+        if self.username and self.password:
+            cmd.extend(["--email", self.username, "--pw", self.password])
+
         try:
             output = safely_run_save_output(cmd, Settings.qt_installer_timeout)
 
@@ -127,7 +132,7 @@ class QtPackageManager:
                 # Log the actual output for debugging
                 logger = getLogger("aqt.helper")
                 logger.debug(f"Installer output: {output_text}")
-                raise RuntimeError("Failed to find package information in installer output")
+                raise RuntimeError(f"Failed to find package information in installer output: {output_text}")
 
         except Exception as e:
             raise RuntimeError(f"Failed to get package information: {str(e)}")
@@ -148,7 +153,7 @@ class QtPackageManager:
             # Find all addon and direct module packages
             for pkg in self.packages:
                 if f"{self._get_base_package_name()}.addons." in pkg.name or pkg.name.startswith(
-                    f"{self._get_base_package_name()}."
+                        f"{self._get_base_package_name()}."
                 ):
                     module_name = pkg.name.split(".")[-1]
                     if module_name != self.arch:  # Skip the base package
@@ -161,7 +166,7 @@ class QtPackageManager:
 
                 # Check if either package name exists
                 matching_pkg = next(
-                    (pkg.name for pkg in self.packages if pkg.name == addon_name or pkg.name == direct_name), None
+                        (pkg.name for pkg in self.packages if pkg.name == addon_name or pkg.name == direct_name), None
                 )
 
                 if matching_pkg:
@@ -174,18 +179,18 @@ class CommercialInstaller:
     """Qt Commercial installer that handles module installation and package management."""
 
     def __init__(
-        self,
-        target: str,
-        arch: Optional[str],
-        version: Optional[str],
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        output_dir: Optional[str] = None,
-        logger: Optional[Logger] = None,
-        base_url: str = "https://download.qt.io",
-        override: Optional[list[str]] = None,
-        modules: Optional[List[str]] = None,
-        no_unattended: bool = False,
+            self,
+            target: str,
+            arch: Optional[str],
+            version: Optional[str],
+            username: Optional[str] = None,
+            password: Optional[str] = None,
+            output_dir: Optional[str] = None,
+            logger: Optional[Logger] = None,
+            base_url: str = "https://download.qt.io",
+            override: Optional[list[str]] = None,
+            modules: Optional[List[str]] = None,
+            no_unattended: bool = False,
     ):
         self.override = override
         self.target = target
@@ -203,7 +208,7 @@ class CommercialInstaller:
         self.os_name = get_os_name()
         self._installer_filename = get_qt_installer_name()
         self.qt_account = get_qt_account_path()
-        self.package_manager = QtPackageManager(self.arch, self.version, self.target)
+        self.package_manager = QtPackageManager(self.arch, self.version, self.target, self.username, self.password)
 
     @staticmethod
     def get_auto_answers() -> str:
@@ -226,12 +231,12 @@ class CommercialInstaller:
 
     @staticmethod
     def build_command(
-        installer_path: str,
-        override: Optional[List[str]] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        output_dir: Optional[str] = None,
-        no_unattended: bool = False,
+            installer_path: str,
+            override: Optional[List[str]] = None,
+            username: Optional[str] = None,
+            password: Optional[str] = None,
+            output_dir: Optional[str] = None,
+            no_unattended: bool = False,
     ) -> List[str]:
         """Build the installation command with proper safeguards."""
         cmd = [installer_path]
@@ -263,12 +268,12 @@ class CommercialInstaller:
     def install(self) -> None:
         """Run the Qt installation process."""
         if (
-            not self.qt_account.exists()
-            and not (self.username and self.password)
-            and not os.environ.get("QT_INSTALLER_JWT_TOKEN")
+                not self.qt_account.exists()
+                and not (self.username and self.password)
+                and not os.environ.get("QT_INSTALLER_JWT_TOKEN")
         ):
             raise RuntimeError(
-                "No Qt account credentials found. Provide username and password or ensure qtaccount.ini exists."
+                    "No Qt account credentials found. Provide username and password or ensure qtaccount.ini exists."
             )
 
         # Check output directory if specified
@@ -315,11 +320,11 @@ class CommercialInstaller:
                 self.package_manager.gather_packages(str(installer_path))
 
                 base_cmd = self.build_command(
-                    str(installer_path.absolute()),
-                    username=self.username,
-                    password=self.password,
-                    output_dir=self.output_dir,
-                    no_unattended=self.no_unattended,
+                        str(installer_path.absolute()),
+                        username=self.username,
+                        password=self.password,
+                        output_dir=self.output_dir,
+                        no_unattended=self.no_unattended,
                 )
 
                 cmd = [
