@@ -605,6 +605,11 @@ class SettingsClass:
         return self._get_config().get("qtofficial", "associate_common_filetypes", fallback="Yes")
 
     @property
+    def qt_installer_checkpackages(self) -> str:
+        """Handle file type associations in Qt installer."""
+        return self._get_config().get("qtofficial", "check_packages", fallback="Yes")
+
+    @property
     def qt_installer_telemetry(self) -> str:
         """Handle telemetry settings in Qt installer."""
         return self._get_config().get("qtofficial", "telemetry", fallback="No")
@@ -640,7 +645,17 @@ def safely_run(cmd: List[str], timeout: int) -> None:
 
 def safely_run_save_output(cmd: List[str], timeout: int) -> Any:
     try:
-        result = subprocess.run(cmd, shell=False, capture_output=True, text=True, timeout=timeout)
+        #        env = os.environ.copy()
+        #        env["QT_QPA_PLATFORM"] = "minimal"
+
+        result = subprocess.run(
+            cmd,
+            #            shell=True,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=timeout,
+            #            env=env,
+        )
         return result
     except Exception:
         raise

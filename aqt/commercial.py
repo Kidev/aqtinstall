@@ -39,6 +39,7 @@ class QtPackageManager:
         self.packages: List[QtPackageInfo] = []
         self.username = username
         self.password = password
+        self.logger = getLogger(__name__)
 
     def _get_cache_dir(self) -> Path:
         """Create and return cache directory path."""
@@ -122,8 +123,15 @@ class QtPackageManager:
         try:
             output = safely_run_save_output(cmd, Settings.qt_installer_timeout)
 
-            # Handle both string and CompletedProcess outputs
             output_text = output.stdout if hasattr(output, "stdout") else str(output)
+
+            if hasattr(output, "stderr") and output.stderr:
+                if "<availablepackages>" in output.stderr:
+                    output_text = output.stderr
+                else:
+                    self.logger.debug(f"Stderr output: {output.stderr}")
+
+            self.logger.info(f"OUTPUT={output_text}")
 
             # Extract the XML portion from the output
             xml_start = output_text.find("<availablepackages>")
@@ -134,9 +142,7 @@ class QtPackageManager:
                 self._parse_packages_xml(xml_content)
                 self._save_to_cache()
             else:
-                # Log the actual output for debugging
-                logger = getLogger("aqt.helper")
-                logger.debug(f"Installer output: {output_text}")
+                self.logger.debug(f"Installer output: {output_text}")
                 raise RuntimeError("Failed to find package information in installer output")
 
         except Exception as e:
@@ -151,11 +157,18 @@ class QtPackageManager:
         if not modules:
             return cmd
 
-        # Ensure package cache exists
-        self.gather_packages(temp_dir)
+        self.logger.info(f"Check packages? {Settings.qt_installer_checkpackages.lower()}")
 
-        if "all" in modules:
-            # Find all addon and direct module packages
+        try:
+            if Settings.qt_installer_checkpackages.lower() == "no":
+                pass
+            else:
+                self.gather_packages(temp_dir)
+        except Exception as e:
+            self.logger.warning(f"Failed to check package information: {str(e)}")
+
+        if "all" in modules and Settings.qt_installer_checkpackages.lower() == "yes":
+            # Find all addons and direct modules packages, requires package check
             for pkg in self.packages:
                 if f"{self._get_base_package_name()}.addons." in pkg.name or pkg.name.startswith(
                     f"{self._get_base_package_name()}."
@@ -164,6 +177,8 @@ class QtPackageManager:
                     if module_name != self.arch:  # Skip the base package
                         cmd.append(pkg.name)
         else:
+            if "all" in modules:
+                self.logger.warning("Package checking disabled, it is not possible to use 'all' as value for modules")
             # Add specifically requested modules that exist in either format
             for module in modules:
                 addon_name = f"{self._get_base_package_name()}.addons.{module}"
@@ -336,7 +351,8 @@ class CommercialInstaller:
                 )
             else:
                 # Initialize package manager and gather packages
-                self.package_manager.gather_packages(str(installer_path))
+                if Settings.qt_installer_checkpackages.lower() == "yes":
+                    self.package_manager.gather_packages(str(installer_path))
 
                 base_cmd = self.build_command(
                     str(installer_path.absolute()),
