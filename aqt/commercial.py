@@ -159,7 +159,7 @@ class QtPackageManager:
             else:
                 # Log the actual output for debugging
                 self.logger.debug(f"Installer output: {output_text}")
-                raise RuntimeError("Failed to find package information in installer output")
+                self.logger.warning("Failed to find package information in installer output")
 
         except Exception as e:
             raise RuntimeError(f"Failed to get package information: {str(e)}")
