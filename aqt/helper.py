@@ -758,7 +758,7 @@ def prepare_installer(installer_path: Path, os_name: str) -> Path:
     extracting the installer if it's packaged. Returns the path to the installer executable.
     """
     if os_name == "linux":
-        os.chmod(installer_path, 0o500)
+        os.chmod(installer_path, 0o555)
         return installer_path
     elif os_name == "mac":
         volume_path = Path(f"/Volumes/{str(uuid.uuid4())}")
