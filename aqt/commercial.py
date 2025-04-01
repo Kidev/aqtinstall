@@ -378,7 +378,7 @@ class CommercialInstaller:
             else:
                 for i in range(len(cmd) - 1):
                     if cmd[i] == "--email" or cmd[i] == "--pw":
-                        cmd[i + 1] = "***"
+                        cmd[i + 1] = "xxx"
                 self.logger.info(f"Would run: {cmd}")
 
         except Exception as e:
