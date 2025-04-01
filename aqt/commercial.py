@@ -370,7 +370,7 @@ class CommercialInstaller:
                     no_unattended=self.no_unattended,
                 )
 
-                install_cmd = self.package_manager.get_install_command(self.modules, temp_dir)
+                install_cmd = self.package_manager.get_install_command(self.modules, str(installer_path.absolute()))
                 cmd = [*base_cmd, *install_cmd]
 
             log_cmd = cmd.copy()
