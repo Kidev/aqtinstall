@@ -747,6 +747,9 @@ def download_installer(base_url: str, installer_filename: str, target_path: Path
     url = f"{base_url}/{base_path}"
     try:
         hash = get_hash(base_path, Settings.hash_algorithm, timeout)
+    except Exception as e:
+        raise RuntimeError(f"Failed to download hash of installer: {e}")
+    try:
         downloadBinaryFile(url, target_path, Settings.hash_algorithm, hash, timeout=timeout)
     except Exception as e:
         raise RuntimeError(f"Failed to download installer: {e}")
