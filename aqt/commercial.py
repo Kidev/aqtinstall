@@ -360,7 +360,7 @@ class CommercialInstaller:
                 )
             else:
                 # Initialize package manager and gather packages
-                self.package_manager.gather_packages(str(installer_path))
+                # self.package_manager.gather_packages(str(installer_path))
 
                 base_cmd = self.build_command(
                     str(installer_path.absolute()),
@@ -370,19 +370,16 @@ class CommercialInstaller:
                     no_unattended=self.no_unattended,
                 )
 
-                install_cmd = self.package_manager.get_install_command(self.modules, str(installer_path.absolute()))
+                install_cmd = self.package_manager.get_install_command(self.modules, str(installer_path))
                 cmd = [*base_cmd, *install_cmd]
 
-            log_cmd = cmd.copy()
-            for i in range(len(log_cmd) - 1):
-                if log_cmd[i] == "--email" or log_cmd[i] == "--pw":
-                    log_cmd[i + 1] = "***"
-
             if not self.dry_run:
-                self.logger.info(f"Running: {log_cmd}")
                 safely_run(cmd, Settings.qt_installer_timeout)
             else:
-                self.logger.info(f"Would run: {log_cmd}")
+                for i in range(len(cmd) - 1):
+                    if cmd[i] == "--email" or cmd[i] == "--pw":
+                        cmd[i + 1] = "***"
+                self.logger.info(f"Would run: {cmd}")
 
         except Exception as e:
             self.logger.error(f"Installation failed: {str(e)}")
