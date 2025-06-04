@@ -20,6 +20,7 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import posixpath
+import re
 from dataclasses import dataclass, field
 from itertools import islice, zip_longest
 from logging import getLogger
@@ -677,7 +678,7 @@ class ToolArchives(QtArchives):
         arch: str = "",
         timeout: Tuple[float, float] = (5, 5),
     ):
-        self.tool_name = tool_name
+        self.tool_name = tool_name if tool_name.startswith("tools_") else f"tools_{tool_name}"
         self.os_name = os_name
         self.logger = getLogger("aqt.archives")
         self.tool_version_str: Optional[str] = version_str
@@ -698,8 +699,148 @@ class ToolArchives(QtArchives):
         help_msg = f"Please use 'aqt list-tool {self.os_name} {self.target}' to show tools available."
         raise ArchiveListError(msg, suggested_action=[help_msg]) from e
 
+    def _get_os_arch_string(self) -> str:
+        """Get the OS architecture string used in repository URLs"""
+        os_name = self.os_name
+        if os_name == "windows":
+            return "windows_x86"
+        elif os_name in ("linux_arm64", "all_os", "windows_arm64"):
+            return os_name
+        else:
+            return f"{os_name}_x64"
+
+    def _get_alternative_tool_locations(self) -> List[Tuple[str, str]]:
+        """
+        Get alternative locations to search for tools.
+        Returns a list of tuples: (base_folder, name_pattern)
+        """
+        os_arch = self._get_os_arch_string()
+        alternatives = []
+
+        # Define alternative locations for different tools
+        tool_alternatives = {
+            "tools_ifw": [
+                ("online/qtsdkrepository/{os_arch}/ifw/tools_ifw_{version}", "qt.tools.ifw.{version}"),
+            ],
+        }
+
+        if self.tool_name in tool_alternatives:
+            for location_pattern, name_pattern in tool_alternatives[self.tool_name]:
+                if self.tool_version_str:
+                    # If version is specified, use it directly
+                    version_no_dots = self.tool_version_str.replace(".", "")
+                    location = location_pattern.format(os_arch=os_arch, version=version_no_dots)
+                    variant_name = name_pattern.format(version=version_no_dots)
+                    alternatives.append((location, variant_name))
+                else:
+                    # No version specified, return base location for discovery
+                    base_location = location_pattern.format(os_arch=os_arch, version="").replace("_{version}", "")
+                    base_location = "/".join(base_location.split("/")[:-1])  # Remove tools_ifw_ part
+                    alternatives.append((base_location, name_pattern))
+
+        return alternatives
+
+    def _try_discover_and_use_latest(self, base_location: str, name_pattern: str) -> bool:
+        """Discover available versions and use the latest one"""
+        try:
+            from bs4 import BeautifulSoup
+
+            # Get directory listing
+            url = posixpath.join(self.base, base_location) + "/"
+            self.logger.debug(f"Trying to discover versions at {url}")
+
+            # Disable hash checking for directory listings to avoid issues
+            html_content = getUrl(url, self.timeout, expected_hash=None)
+            soup = BeautifulSoup(html_content, "html.parser")
+
+            versions = []
+            for link in soup.find_all("a"):
+                href = link.get("href", "")
+                # Extract version numbers from folders like "tools_ifw_48/"
+                match = re.search(rf"{re.escape(self.tool_name)}_(\d+)/?$", href.rstrip("/"))
+                if match:
+                    version_num = match.group(1)
+                    folder_name = href.rstrip("/")
+                    versions.append((int(version_num), folder_name, version_num))
+
+            if versions:
+                # Get latest version
+                versions.sort(key=lambda x: x[0], reverse=True)
+                _, folder_name, version_num = versions[0]
+                self.logger.debug(f"Found versions: {[v[1] for v in versions]}, using latest: {folder_name}")
+
+                # Try this version
+                location = posixpath.join(base_location, folder_name)
+                variant_name = name_pattern.format(version=version_num)
+
+                update_xml_url = posixpath.join(location, "Updates.xml")
+                self.logger.debug(f"Trying to download Updates.xml from {update_xml_url}")
+                update_xml_text = self._download_update_xml(update_xml_url, silent=True)
+                if update_xml_text:
+                    old_arch = self.arch
+                    self.arch = variant_name
+                    try:
+                        self._parse_update_xml(location, update_xml_text, None)
+                        return bool(self.archives)
+                    except Exception as e:
+                        self.logger.debug(f"Failed to parse XML for {variant_name}: {e}")
+                        self.arch = old_arch
+                        return False
+                else:
+                    self.logger.debug(f"Failed to download Updates.xml from {update_xml_url}")
+            else:
+                self.logger.debug(f"No version folders found in {url}")
+        except Exception as e:
+            self.logger.debug(f"Failed to discover versions at {base_location}: {e}")
+
+        return False
+
+    def _try_alternative_location(self, location: str, variant_name: str) -> bool:
+        """Try to get archives from an alternative location"""
+        try:
+            update_xml_url = posixpath.join(location, "Updates.xml")
+            self.logger.debug(f"Trying alternative location: {update_xml_url}")
+            update_xml_text = self._download_update_xml(update_xml_url, silent=True)
+            if update_xml_text:
+                old_arch = self.arch
+                self.arch = variant_name
+                try:
+                    self._parse_update_xml(location, update_xml_text, None)
+                    return bool(self.archives)
+                except Exception as e:
+                    self.logger.debug(f"Failed to parse XML for {variant_name}: {e}")
+                    self.arch = old_arch
+                    return False
+        except ArchiveDownloadError as e:
+            self.logger.debug(f"Alternative location failed: {e}")
+        return False
+
     def _get_archives(self):
-        self._get_archives_base(self.tool_name, None)
+        """Get archives, trying alternative locations first"""
+        self.logger.debug(f"Looking for tool {self.tool_name} with version {self.tool_version_str}")
+
+        # Try alternative locations first
+        for alt_location, name_pattern in self._get_alternative_tool_locations():
+            self.logger.debug(f"Trying alternative location: {alt_location}")
+            if self.tool_version_str:
+                # Direct version request
+                if self._try_alternative_location(
+                    alt_location, name_pattern.format(version=self.tool_version_str.replace(".", ""))
+                ):
+                    self.logger.debug(f"Successfully found {self.tool_name} at alternative location")
+                    return
+            else:
+                # Need to discover versions
+                if self._try_discover_and_use_latest(alt_location, name_pattern):
+                    self.logger.debug(f"Successfully discovered and installed latest {self.tool_name}")
+                    return
+
+        self.logger.debug("Alternative locations failed, trying traditional location")
+        # Fall back to traditional location
+        try:
+            self._get_archives_base(self.tool_name, None)
+        except ArchiveDownloadError as e:
+            raise ArchiveListError(f"Unable to find tool {self.tool_name}", suggested_action=self.help_msg()) from e
 
     def _parse_update_xml(self, os_target_folder: str, update_xml_text: str, *ignored: Any) -> None:
         update_xml = Updates.fromstring(self.base, update_xml_text)
