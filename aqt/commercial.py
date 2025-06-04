@@ -158,8 +158,9 @@ class QtPackageManager:
                 self._save_to_cache()
             else:
                 # Log the actual output for debugging
-                self.logger.debug(f"Installer output: {output_text}")
-                raise RuntimeError("Failed to find package information in installer output")
+                self.logger.warning(f"Installer output: {output_text}")
+                self.logger.warning("Failed to find package information in installer output")
+                self.logger.warning(f"Will not check for validity of modules for {base_package}")
 
         except Exception as e:
             raise RuntimeError(f"Failed to get package information: {str(e)}")
