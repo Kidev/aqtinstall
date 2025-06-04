@@ -635,7 +635,8 @@ class Cli:
             archive_id = ArchiveId("tools", os_name, target)
             meta = MetadataFactory(archive_id, base_url=base, is_latest_version=True, tool_name=tool_name)
             try:
-                archs: List[str] = cast(list, meta.getList())
+                all_archs: List[str] = cast(list, meta.getList())
+                archs = [all_archs[-1]] if all_archs else []
             except ArchiveDownloadError as e:
                 msg = f"Failed to locate XML data for the tool '{tool_name}'."
                 raise ArchiveListError(msg, suggested_action=suggested_follow_up(meta)) from e

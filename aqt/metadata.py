@@ -699,6 +699,7 @@ class MetadataFactory:
         self.spec = spec
         self.base_url = base_url or Settings.baseurl
         self.tool_name = "" if tool_name is None else tool_name
+        self.is_latest_version = is_latest_version
 
         if archive_id.is_tools():
             if tool_name is not None:
@@ -809,30 +810,10 @@ class MetadataFactory:
         """Fetch list of available tools"""
         html_doc = self.fetch_http(self.archive_id.to_url(), False)
         tools = list(self.iterate_folders(html_doc, self.base_url, filter_category="tools"))
-
-        self.logger.debug(f"Found tools at standard location: {tools}")
-
-        # Check alternative locations for additional tools
-        alternative_locations = self._get_tool_alternative_locations()
-        for tool_name, locations in alternative_locations.items():
-            if tool_name not in tools:
-                # Check if tool exists in any alternative location
-                for location in locations:
-                    try:
-                        self.logger.debug(f"Checking alternative location for {tool_name}: {location}")
-                        alt_html = self.fetch_http(location, False)
-                        if alt_html and (f"{tool_name}_" in alt_html or "Updates.xml" in alt_html):
-                            tools.append(tool_name)
-                            self.logger.debug(f"Found {tool_name} at alternative location")
-                            break
-                    except Exception as e:
-                        self.logger.debug(f"Alternative location check failed for {tool_name}: {e}")
-                        continue
-
-        return sorted(set(tools), reverse=True)
+        return sorted(set(tools), reverse=True)  # Restored to reverse=True to match test expectations
 
     def fetch_tool_modules(self, tool_name: str) -> List[str]:
-        """Fetch tool modules from both standard and alternative locations"""
+        """Fetch tool modules - raise error if tool doesn't exist"""
         modules = []
 
         # Try standard location first
@@ -841,25 +822,23 @@ class MetadataFactory:
             if tool_data:
                 modules.extend(list(tool_data.keys()))
                 self.logger.debug(f"Found {len(tool_data)} modules at standard location for {tool_name}")
+        except ArchiveDownloadError:
+            pass
         except Exception as e:
             self.logger.debug(f"Standard location failed for {tool_name}: {e}")
 
-        # Also check alternative locations
+        # Always check alternative locations to get complete list
         alternative_locations = self._get_tool_alternative_locations()
-
         if tool_name in alternative_locations:
             for location in alternative_locations[tool_name]:
                 try:
                     self.logger.debug(f"Checking alternative location: {location}")
                     html_doc = self.fetch_http(location, False)
-
                     from bs4 import BeautifulSoup
 
                     soup = BeautifulSoup(html_doc, "html.parser")
-                    found_versions = []
                     for link in soup.find_all("a"):
                         href = link.get("href", "")
-                        # Extract version pattern from folders like "tools_ifw_48/"
                         if f"{tool_name}_" in href:
                             match = re.search(rf"{tool_name}_(\d+)", href)
                             if match:
@@ -867,16 +846,25 @@ class MetadataFactory:
                                 module_name = f"qt.{tool_name.replace('_', '.')}.{version_num}"
                                 if module_name not in modules:
                                     modules.append(module_name)
-                                    found_versions.append(version_num)
-
-                    if found_versions:
-                        self.logger.debug(f"Found versions at {location}: {found_versions}")
-
+                    if modules:  # Found some in this location
+                        break
                 except Exception as e:
                     self.logger.debug(f"Alternative location {location} failed: {e}")
                     continue
 
-        return sorted(set(modules))
+        if not modules:
+            # Re-attempt the standard location to get the proper error
+            self._fetch_module_metadata(tool_name)
+
+        all_modules = sorted(set(modules))
+
+        # For installation (when is_latest_version=True), return only the latest
+        # For listing, return all
+        if self.is_latest_version:
+            self.logger.debug(f"Returning latest version only: {all_modules[-1] if all_modules else None}")
+            return [all_modules[-1]] if all_modules else []
+
+        return all_modules
 
     def fetch_tool_by_simple_spec(self, tool_name: str, simple_spec: SimpleSpec) -> Optional[Dict[str, str]]:
         # Get data for all the tool modules
@@ -1096,7 +1084,7 @@ class MetadataFactory:
                             modules.add(ext)
             except (ChecksumDownloadFailure, ArchiveDownloadError):
                 pass
-        return sorted(modules, reverse=True)
+        return sorted(modules, reverse=False)
 
     @staticmethod
     def require_text(element: Element, key: str) -> str:
