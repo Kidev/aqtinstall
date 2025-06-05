@@ -1204,6 +1204,7 @@ def test_list_tool_cli(monkeypatch, capsys, host: str, target: str, tool_name: s
         return xmltext
 
     monkeypatch.setattr(MetadataFactory, "fetch_http", _mock_fetch_http)
+    monkeypatch.setattr(shutil, "get_terminal_size", lambda fallback=(80, 24): os.terminal_size((120, 24)))
 
     cli = Cli()
     cli.run(["list-tool", host, target])

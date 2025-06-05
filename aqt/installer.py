@@ -107,7 +107,7 @@ class ListArgumentParser(BaseArgumentParser):
     target: str
     email: Optional[str]
     pw: Optional[str]
-    search_terms: Optional[str]
+    search_terms: Optional[List[str]]
 
 
 class ListToolArgumentParser(ListArgumentParser):
@@ -635,7 +635,8 @@ class Cli:
             archive_id = ArchiveId("tools", os_name, target)
             meta = MetadataFactory(archive_id, base_url=base, is_latest_version=True, tool_name=tool_name)
             try:
-                archs: List[str] = cast(list, meta.getList())
+                all_archs: List[str] = cast(list, meta.getList())
+                archs = [all_archs[-1]] if all_archs else []
             except ArchiveDownloadError as e:
                 msg = f"Failed to locate XML data for the tool '{tool_name}'."
                 raise ArchiveListError(msg, suggested_action=suggested_follow_up(meta)) from e
@@ -697,6 +698,8 @@ class Cli:
                 except Exception as e:
                     self.logger.warning(f"{e}. Ignoring 'arch' value")
 
+            target_str = "" if target_str is None else target_str
+            version_str = "" if version_str is None else version_str
             commercial_search_args.search_terms = [rf"^.*{re.escape(version_str)}\.{re.escape(target_str)}.*$"]
 
             ignored_options = []
@@ -749,7 +752,7 @@ class Cli:
         else:
             modules_ver, modules_query, is_long = None, None, False
 
-        for version_str in (modules_ver, args.arch, args.archives[0] if args.archives else None):
+        for version_str in (modules_ver or "", args.arch or "", args.archives[0] if args.archives else ""):
             Cli._validate_version_str(version_str, allow_latest=True, allow_empty=True)
 
         spec = None
