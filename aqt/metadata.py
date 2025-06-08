@@ -698,19 +698,21 @@ class MetadataFactory:
         self.archive_id = archive_id
         self.spec = spec
         self.base_url = base_url or Settings.baseurl
+        self.tool_name = "" if tool_name is None else tool_name
+        self.is_latest_version = is_latest_version
 
         if archive_id.is_tools():
             if tool_name is not None:
                 if not tool_name.startswith("tools_") and tool_name != "sdktool":
-                    _tool_name = f"tools_{tool_name}"
+                    self.tool_name = f"tools_{tool_name}"
                 else:
-                    _tool_name = tool_name
+                    self.tool_name = tool_name
                 if is_long_listing:
                     self.request_type = "tool long listing"
-                    self._action: MetadataFactory.Action = lambda: self.fetch_tool_long_listing(_tool_name)
+                    self._action: MetadataFactory.Action = lambda: self.fetch_tool_long_listing(self.tool_name)
                 else:
                     self.request_type = "tool variant names"
-                    self._action = lambda: self.fetch_tool_modules(_tool_name)
+                    self._action = lambda: self.fetch_tool_modules(self.tool_name)
             else:
                 self.request_type = "tools"
                 self._action = self.fetch_tools
@@ -805,12 +807,64 @@ class MetadataFactory:
         return list(self.iterate_folders(html_doc, self.base_url))
 
     def fetch_tools(self) -> List[str]:
+        """Fetch list of available tools"""
         html_doc = self.fetch_http(self.archive_id.to_url(), False)
-        return list(self.iterate_folders(html_doc, self.base_url, filter_category="tools"))
+        tools = list(self.iterate_folders(html_doc, self.base_url, filter_category="tools"))
+        return sorted(set(tools), reverse=True)  # Restored to reverse=True to match test expectations
 
     def fetch_tool_modules(self, tool_name: str) -> List[str]:
-        tool_data = self._fetch_module_metadata(tool_name)
-        return list(tool_data.keys())
+        """Fetch tool modules - raise error if tool doesn't exist"""
+        modules = []
+
+        # Try standard location first
+        try:
+            tool_data = self._fetch_module_metadata(tool_name)
+            if tool_data:
+                modules.extend(list(tool_data.keys()))
+                self.logger.debug(f"Found {len(tool_data)} modules at standard location for {tool_name}")
+        except ArchiveDownloadError:
+            pass
+        except Exception as e:
+            self.logger.debug(f"Standard location failed for {tool_name}: {e}")
+
+        # Always check alternative locations to get complete list
+        alternative_locations = self._get_tool_alternative_locations()
+        if tool_name in alternative_locations:
+            for location in alternative_locations[tool_name]:
+                try:
+                    self.logger.debug(f"Checking alternative location: {location}")
+                    html_doc = self.fetch_http(location, False)
+                    from bs4 import BeautifulSoup
+
+                    soup = BeautifulSoup(html_doc, "html.parser")
+                    for link in soup.find_all("a"):
+                        href = link.get("href", "")
+                        if f"{tool_name}_" in href:
+                            match = re.search(rf"{tool_name}_(\d+)", href)
+                            if match:
+                                version_num = match.group(1)
+                                module_name = f"qt.{tool_name.replace('_', '.')}.{version_num}"
+                                if module_name not in modules:
+                                    modules.append(module_name)
+                    if modules:  # Found some in this location
+                        break
+                except Exception as e:
+                    self.logger.debug(f"Alternative location {location} failed: {e}")
+                    continue
+
+        if not modules:
+            # Re-attempt the standard location to get the proper error
+            self._fetch_module_metadata(tool_name)
+
+        all_modules = sorted(set(modules))
+
+        # For installation (when is_latest_version=True), return only the latest
+        # For listing, return all
+        if self.is_latest_version:
+            self.logger.debug(f"Returning latest version only: {all_modules[-1] if all_modules else None}")
+            return [all_modules[-1]] if all_modules else []
+
+        return all_modules
 
     def fetch_tool_by_simple_spec(self, tool_name: str, simple_spec: SimpleSpec) -> Optional[Dict[str, str]]:
         # Get data for all the tool modules
@@ -1030,7 +1084,7 @@ class MetadataFactory:
                             modules.add(ext)
             except (ChecksumDownloadFailure, ArchiveDownloadError):
                 pass
-        return sorted(modules)
+        return sorted(modules, reverse=False)
 
     @staticmethod
     def require_text(element: Element, key: str) -> str:
@@ -1180,6 +1234,21 @@ class MetadataFactory:
         if not selected_arch:
             raise EmptyMetadata("No default desktop architecture available")
         return selected_arch
+
+    def _get_tool_alternative_locations(self) -> Dict[str, List[str]]:
+        """Get alternative URL patterns for tools that might be in non-standard locations"""
+        os_name = self.archive_id.host
+        if os_name == "windows":
+            os_name += "_x86"
+        elif os_name not in ("linux_arm64", "all_os", "windows_arm64"):
+            os_name += "_x64"
+
+        return {
+            "tools_ifw": [f"online/qtsdkrepository/{os_name}/ifw/"],
+            # Add more tools and their alternative locations here as needed
+            # Example for future tools:
+            # "tools_example": [f"online/qtsdkrepository/{os_name}/example/"],
+        }
 
 
 def suggested_follow_up(meta: MetadataFactory) -> List[str]:

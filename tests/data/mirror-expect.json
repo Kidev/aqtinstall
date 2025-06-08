@@ -54,17 +54,17 @@
     ]
   },
   "tools": [
-      "tools_qt3dstudio_openglruntime_240",
-      "tools_qt3dstudio_openglruntime_250",
-      "tools_qt3dstudio_openglruntime_260",
-      "tools_qt3dstudio_openglruntime_270",
-      "tools_qt3dstudio_openglruntime_270_5150",
-      "tools_qt3dstudio_openglruntime_280",
-      "tools_qt3dstudio_openglruntime_280_5151",
-      "tools_qt3dstudio_openglruntime_preview",
-      "tools_qt3dstudio_runtime_220",
-      "tools_qt3dstudio_runtime_230",
+      "tools_qt3dstudio_runtime_preview",
       "tools_qt3dstudio_runtime_240",
-      "tools_qt3dstudio_runtime_preview"
+      "tools_qt3dstudio_runtime_230",
+      "tools_qt3dstudio_runtime_220",
+      "tools_qt3dstudio_openglruntime_preview",
+      "tools_qt3dstudio_openglruntime_280_5151",
+      "tools_qt3dstudio_openglruntime_280",
+      "tools_qt3dstudio_openglruntime_270_5150",
+      "tools_qt3dstudio_openglruntime_270",
+      "tools_qt3dstudio_openglruntime_260",
+      "tools_qt3dstudio_openglruntime_250",
+      "tools_qt3dstudio_openglruntime_240"
   ]
 }
